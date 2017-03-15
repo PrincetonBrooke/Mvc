@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Text;
 using Microsoft.AspNetCore.Razor.Evolution;
 
@@ -11,6 +12,7 @@ namespace Microsoft.AspNetCore.Mvc.Razor
         public static string Serialize(RazorCSharpDocument csharpDocument, RazorSourceDocument sourceDocument)
         {
             var builder = new StringBuilder();
+            var sourceFileName = sourceDocument.FileName;
             var charBuffer = new char[sourceDocument.Length];
             sourceDocument.CopyTo(0, charBuffer, 0, sourceDocument.Length);
             var sourceContent = new string(charBuffer);
@@ -18,6 +20,10 @@ namespace Microsoft.AspNetCore.Mvc.Razor
             for (var i = 0; i < csharpDocument.LineMappings.Count; i++)
             {
                 var lineMapping = csharpDocument.LineMappings[i];
+                if (!string.Equals(lineMapping.OriginalSpan.FilePath, sourceFileName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
                 builder.Append("Source Location: ");
                 AppendMappingLocation(builder, lineMapping.OriginalSpan, sourceContent);

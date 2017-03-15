@@ -2,12 +2,20 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.Mvc.Razor.Compilation;
 using Microsoft.AspNetCore.Mvc.Razor.Host;
+using Microsoft.AspNetCore.Mvc.Razor.Internal;
+using Microsoft.AspNetCore.Mvc.Razor.TagHelpers;
 using Microsoft.AspNetCore.Razor.Evolution;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Razor;
+using Microsoft.Extensions.DependencyModel;
+using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace Microsoft.AspNetCore.Mvc.Razor
@@ -122,6 +130,8 @@ namespace Microsoft.AspNetCore.Mvc.Razor
                 InjectDirective.Register(b);
                 ModelDirective.Register(b);
 
+                b.AddTargetExtension(new InjectDirectiveTargetExtension());
+
                 b.Features.Add(new ModelExpressionPass());
                 b.Features.Add(new MvcViewDocumentClassifierPass());
                 b.Features.Add(new DefaultInstrumentationPass());
@@ -130,16 +140,18 @@ namespace Microsoft.AspNetCore.Mvc.Razor
                 b.Features.Add(GetMetadataReferenceFeature());
             });
 
-            // Act
-            RazorCSharpDocument csharpDocument = null;
-            using (var stream = ResourceFile.GetResourceStream(_assembly, inputFile, sourceFile: true))
-            {
-                var codeDocument = RazorCodeDocument.Create(RazorSourceDocument.ReadFrom(stream, inputFile));
+            var inputContent = ResourceFile.ReadResource(_assembly, inputFile, sourceFile: true);
+            var fileProvider = new TestFileProvider();
+            fileProvider.AddFile(inputFile, inputContent);
+            var fileInfo = fileProvider.GetFileInfo(inputFile);
+            var razorTemplateEngine = new MvcRazorTemplateEngine(engine, new DefaultRazorProject(fileProvider));
+            var razorProjectItem = new DefaultRazorProjectItem(fileInfo, basePath: null, path: inputFile);
 
-                codeDocument.Items["SuppressUniqueIds"] = "test";
-                engine.Process(codeDocument);
-                csharpDocument = codeDocument.GetCSharpDocument();
-            }
+            // Act
+            var codeDocument = razorTemplateEngine.CreateCodeDocument(razorProjectItem);
+            codeDocument.Items["SuppressUniqueIds"] = "test";
+
+            var csharpDocument = razorTemplateEngine.GenerateCode(codeDocument);
 
             // Assert
             Assert.Empty(csharpDocument.Diagnostics);
@@ -166,6 +178,8 @@ namespace Microsoft.AspNetCore.Mvc.Razor
                 InjectDirective.Register(b);
                 ModelDirective.Register(b);
 
+                b.AddTargetExtension(new InjectDirectiveTargetExtension());
+
                 b.Features.Add(new ModelExpressionPass());
                 b.Features.Add(new MvcViewDocumentClassifierPass());
 
@@ -173,19 +187,20 @@ namespace Microsoft.AspNetCore.Mvc.Razor
                 b.Features.Add(GetMetadataReferenceFeature());
             });
 
-            // Act
-            RazorCodeDocument codeDocument = null;
-            using (var stream = ResourceFile.GetResourceStream(_assembly, inputFile, sourceFile: true))
-            {
-                // VS tooling passes in paths in all lower case. We'll mimic this behavior in our tests.
-                codeDocument = RazorCodeDocument.Create(RazorSourceDocument.ReadFrom(stream, inputFile.ToLowerInvariant()));
+            var inputContent = ResourceFile.ReadResource(_assembly, inputFile, sourceFile: true);
+            var fileProvider = new TestFileProvider();
+            fileProvider.AddFile(inputFile, inputContent);
+            var fileInfo = fileProvider.GetFileInfo(inputFile);
+            var razorTemplateEngine = new MvcRazorTemplateEngine(engine, new DefaultRazorProject(fileProvider));
+            var razorProjectItem = new DefaultRazorProjectItem(fileInfo, basePath: null, path: inputFile);
 
-                codeDocument.Items["SuppressUniqueIds"] = "test";
-                engine.Process(codeDocument);
-            }
+            // Act
+            var codeDocument = razorTemplateEngine.CreateCodeDocument(razorProjectItem);
+            codeDocument.Items["SuppressUniqueIds"] = "test";
+
+            var csharpDocument = razorTemplateEngine.GenerateCode(codeDocument);
 
             // Assert
-            var csharpDocument = codeDocument.GetCSharpDocument();
             Assert.Empty(csharpDocument.Diagnostics);
 
             var serializedMappings = LineMappingsSerializer.Serialize(csharpDocument, codeDocument.Source);
@@ -201,10 +216,25 @@ namespace Microsoft.AspNetCore.Mvc.Razor
 
         private static IRazorEngineFeature GetMetadataReferenceFeature()
         {
-            var references = AppDomain.CurrentDomain
-                    .GetAssemblies()
-                    .Select(assembly => MetadataReference.CreateFromFile(assembly.Location))
-                    .ToList<MetadataReference>();
+            var currentAssembly = typeof(RazorEngineTest).GetTypeInfo().Assembly;
+            var dependencyContext = DependencyContext.Load(currentAssembly);
+            var assemblyPaths = new List<string>();
+            foreach (var library in dependencyContext.CompileLibraries)
+            {
+                try
+                {
+                    assemblyPaths.Add(Assembly.Load(new AssemblyName(library.Name)).Location);
+                }
+                catch
+                {
+                    // Ignore Assembly load exceptions. We don't care about them.
+                    continue;
+                }
+            }
+
+            var references = assemblyPaths
+                .Select(assemblyPath => MetadataReference.CreateFromFile(assemblyPath))
+                .ToList<MetadataReference>();
 
             var feature = new DefaultMetadataReferenceFeature()
             {
