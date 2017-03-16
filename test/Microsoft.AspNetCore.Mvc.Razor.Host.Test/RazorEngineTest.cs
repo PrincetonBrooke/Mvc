@@ -146,11 +146,10 @@ namespace Microsoft.AspNetCore.Mvc.Razor
             var fileInfo = fileProvider.GetFileInfo(inputFile);
             var razorTemplateEngine = new MvcRazorTemplateEngine(engine, new DefaultRazorProject(fileProvider));
             var razorProjectItem = new DefaultRazorProjectItem(fileInfo, basePath: null, path: inputFile);
-
-            // Act
             var codeDocument = razorTemplateEngine.CreateCodeDocument(razorProjectItem);
             codeDocument.Items["SuppressUniqueIds"] = "test";
 
+            // Act
             var csharpDocument = razorTemplateEngine.GenerateCode(codeDocument);
 
             // Assert
@@ -193,11 +192,10 @@ namespace Microsoft.AspNetCore.Mvc.Razor
             var fileInfo = fileProvider.GetFileInfo(inputFile);
             var razorTemplateEngine = new MvcRazorTemplateEngine(engine, new DefaultRazorProject(fileProvider));
             var razorProjectItem = new DefaultRazorProjectItem(fileInfo, basePath: null, path: inputFile);
-
-            // Act
             var codeDocument = razorTemplateEngine.CreateCodeDocument(razorProjectItem);
             codeDocument.Items["SuppressUniqueIds"] = "test";
 
+            // Act
             var csharpDocument = razorTemplateEngine.GenerateCode(codeDocument);
 
             // Assert
@@ -218,21 +216,8 @@ namespace Microsoft.AspNetCore.Mvc.Razor
         {
             var currentAssembly = typeof(RazorEngineTest).GetTypeInfo().Assembly;
             var dependencyContext = DependencyContext.Load(currentAssembly);
-            var assemblyPaths = new List<string>();
-            foreach (var library in dependencyContext.CompileLibraries)
-            {
-                try
-                {
-                    assemblyPaths.Add(Assembly.Load(new AssemblyName(library.Name)).Location);
-                }
-                catch
-                {
-                    // Ignore Assembly load exceptions. We don't care about them.
-                    continue;
-                }
-            }
 
-            var references = assemblyPaths
+            var references = dependencyContext.CompileLibraries.SelectMany(l => l.ResolveReferencePaths())
                 .Select(assemblyPath => MetadataReference.CreateFromFile(assemblyPath))
                 .ToList<MetadataReference>();
 

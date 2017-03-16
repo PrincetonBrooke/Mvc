@@ -79,18 +79,16 @@ System.Object __typeHelper = "Microsoft.AspNetCore.Mvc.Razor.TagHelpers.UrlResol
         }
         #pragma warning restore 219
         private static System.Object __o = null;
-        private global::Microsoft.AspNetCore.Mvc.Razor.TagHelpers.UrlResolutionTagHelper __Microsoft_AspNetCore_Mvc_Razor_TagHelpers_UrlResolutionTagHelper = null;
         #pragma warning disable 1998
         public async override global::System.Threading.Tasks.Task ExecuteAsync()
         {
-#line 3 "TestFiles/Input/Basic.cshtml"
-__o = Html.Input("SomeKey");
+#line 1 "TestFiles/Input/Basic.cshtml"
+       __o = logo;
 
 #line default
 #line hidden
-            __Microsoft_AspNetCore_Mvc_Razor_TagHelpers_UrlResolutionTagHelper = CreateTagHelper<global::Microsoft.AspNetCore.Mvc.Razor.TagHelpers.UrlResolutionTagHelper>();
-#line 1 "TestFiles/Input/Basic.cshtml"
-       __o = logo;
+#line 3 "TestFiles/Input/Basic.cshtml"
+__o = Html.Input("SomeKey");
 
 #line default
 #line hidden
