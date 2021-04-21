@@ -9,12 +9,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.DataAnnotations;
-using Microsoft.AspNetCore.Mvc.DataAnnotations.Internal;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
 using Xunit;
@@ -438,11 +438,11 @@ namespace Microsoft.AspNetCore.Mvc.Test
             var viewData = new ViewDataDictionary(metadataProvider, new ModelStateDictionary());
             var tempData = new TempDataDictionary(httpContext, Mock.Of<ITempDataProvider>());
 
-            var valiatorProviders = new[]
+            var validatorProviders = new[]
             {
                 new DataAnnotationsModelValidatorProvider(
                     new ValidationAttributeAdapterProvider(),
-                    new TestOptionsManager<MvcDataAnnotationsLocalizationOptions>(),
+                    Options.Create(new MvcDataAnnotationsLocalizationOptions()),
                     stringLocalizerFactory: null),
             };
 
@@ -457,7 +457,7 @@ namespace Microsoft.AspNetCore.Mvc.Test
             {
                 ControllerContext = controllerContext,
                 MetadataProvider = metadataProvider,
-                ObjectValidator = new DefaultObjectValidator(metadataProvider, valiatorProviders),
+                ObjectValidator = new DefaultObjectValidator(metadataProvider, validatorProviders, new MvcOptions()),
                 TempData = tempData,
                 ViewData = viewData,
             };

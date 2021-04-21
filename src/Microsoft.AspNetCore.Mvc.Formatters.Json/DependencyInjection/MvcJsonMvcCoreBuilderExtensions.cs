@@ -4,8 +4,8 @@
 using System;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.Formatters.Json;
-using Microsoft.AspNetCore.Mvc.Formatters.Json.Internal;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -66,7 +66,7 @@ namespace Microsoft.Extensions.DependencyInjection
                 throw new ArgumentNullException(nameof(setupAction));
             }
 
-            builder.Services.Configure<MvcJsonOptions>(setupAction);
+            builder.Services.Configure(setupAction);
             return builder;
         }
 
@@ -75,6 +75,8 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             services.TryAddEnumerable(
                 ServiceDescriptor.Transient<IConfigureOptions<MvcOptions>, MvcJsonMvcOptionsSetup>());
+            services.TryAddEnumerable(
+                ServiceDescriptor.Transient<IPostConfigureOptions<MvcJsonOptions>, MvcJsonOptionsConfigureCompatibilityOptions>());
             services.TryAddEnumerable(
                 ServiceDescriptor.Transient<IApiDescriptionProvider, JsonPatchOperationsArrayProvider>());
             services.TryAddSingleton<JsonResultExecutor>();

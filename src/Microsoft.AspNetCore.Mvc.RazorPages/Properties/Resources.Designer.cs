@@ -11,132 +11,172 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
             = new ResourceManager("Microsoft.AspNetCore.Mvc.RazorPages.Resources", typeof(Resources).GetTypeInfo().Assembly);
 
         /// <summary>
-        /// The route for the page at '{0}' cannot start with / or ~/. Pages do not support overriding the file path of the page.
-        /// </summary>
-        internal static string PageActionDescriptorProvider_RouteTemplateCannotBeOverrideable
-        {
-            get { return GetString("PageActionDescriptorProvider_RouteTemplateCannotBeOverrideable"); }
-        }
-
-        /// <summary>
-        /// The route for the page at '{0}' cannot start with / or ~/. Pages do not support overriding the file path of the page.
-        /// </summary>
-        internal static string FormatPageActionDescriptorProvider_RouteTemplateCannotBeOverrideable(object p0)
-        {
-            return string.Format(CultureInfo.CurrentCulture, GetString("PageActionDescriptorProvider_RouteTemplateCannotBeOverrideable"), p0);
-        }
-
-        /// <summary>
         /// The '{0}' property of '{1}' must not be null.
         /// </summary>
         internal static string PropertyOfTypeCannotBeNull
         {
-            get { return GetString("PropertyOfTypeCannotBeNull"); }
+            get => GetString("PropertyOfTypeCannotBeNull");
         }
 
         /// <summary>
         /// The '{0}' property of '{1}' must not be null.
         /// </summary>
         internal static string FormatPropertyOfTypeCannotBeNull(object p0, object p1)
-        {
-            return string.Format(CultureInfo.CurrentCulture, GetString("PropertyOfTypeCannotBeNull"), p0, p1);
-        }
+            => string.Format(CultureInfo.CurrentCulture, GetString("PropertyOfTypeCannotBeNull"), p0, p1);
 
         /// <summary>
         /// Page created by '{0}' must be an instance of '{1}'.
         /// </summary>
         internal static string ActivatedInstance_MustBeAnInstanceOf
         {
-            get { return GetString("ActivatedInstance_MustBeAnInstanceOf"); }
+            get => GetString("ActivatedInstance_MustBeAnInstanceOf");
         }
 
         /// <summary>
         /// Page created by '{0}' must be an instance of '{1}'.
         /// </summary>
         internal static string FormatActivatedInstance_MustBeAnInstanceOf(object p0, object p1)
-        {
-            return string.Format(CultureInfo.CurrentCulture, GetString("ActivatedInstance_MustBeAnInstanceOf"), p0, p1);
-        }
+            => string.Format(CultureInfo.CurrentCulture, GetString("ActivatedInstance_MustBeAnInstanceOf"), p0, p1);
 
         /// <summary>
-        /// Argument '{0}' is not the same instance used to create '{1}'.
+        /// The context used to execute '{0}' must be an instance of '{1}'. Returning a '{2}' from a controller is a not supported.
         /// </summary>
         internal static string PageViewResult_ContextIsInvalid
         {
-            get { return GetString("PageViewResult_ContextIsInvalid"); }
+            get => GetString("PageViewResult_ContextIsInvalid");
         }
 
         /// <summary>
-        /// Argument '{0}' is not the same instance used to create '{1}'.
+        /// The context used to execute '{0}' must be an instance of '{1}'. Returning a '{2}' from a controller is a not supported.
         /// </summary>
-        internal static string FormatPageViewResult_ContextIsInvalid(object p0, object p1)
-        {
-            return string.Format(CultureInfo.CurrentCulture, GetString("PageViewResult_ContextIsInvalid"), p0, p1);
-        }
+        internal static string FormatPageViewResult_ContextIsInvalid(object p0, object p1, object p2)
+            => string.Format(CultureInfo.CurrentCulture, GetString("PageViewResult_ContextIsInvalid"), p0, p1, p2);
 
         /// <summary>
         /// Value cannot be null or empty.
         /// </summary>
         internal static string ArgumentCannotBeNullOrEmpty
         {
-            get { return GetString("ArgumentCannotBeNullOrEmpty"); }
+            get => GetString("ArgumentCannotBeNullOrEmpty");
         }
 
         /// <summary>
         /// Value cannot be null or empty.
         /// </summary>
         internal static string FormatArgumentCannotBeNullOrEmpty()
-        {
-            return GetString("ArgumentCannotBeNullOrEmpty");
-        }
+            => GetString("ArgumentCannotBeNullOrEmpty");
 
         /// <summary>
         /// Unsupported handler method return type '{0}'.
         /// </summary>
         internal static string UnsupportedHandlerMethodType
         {
-            get { return GetString("UnsupportedHandlerMethodType"); }
+            get => GetString("UnsupportedHandlerMethodType");
         }
 
         /// <summary>
         /// Unsupported handler method return type '{0}'.
         /// </summary>
         internal static string FormatUnsupportedHandlerMethodType(object p0)
-        {
-            return string.Format(CultureInfo.CurrentCulture, GetString("UnsupportedHandlerMethodType"), p0);
-        }
+            => string.Format(CultureInfo.CurrentCulture, GetString("UnsupportedHandlerMethodType"), p0);
 
         /// <summary>
         /// Multiple handlers matched. The following handlers matched route data and had all constraints satisfied:{0}{0}{1}
         /// </summary>
         internal static string AmbiguousHandler
         {
-            get { return GetString("AmbiguousHandler"); }
+            get => GetString("AmbiguousHandler");
         }
 
         /// <summary>
         /// Multiple handlers matched. The following handlers matched route data and had all constraints satisfied:{0}{0}{1}
         /// </summary>
         internal static string FormatAmbiguousHandler(object p0, object p1)
+            => string.Format(CultureInfo.CurrentCulture, GetString("AmbiguousHandler"), p0, p1);
+
+        /// <summary>
+        /// Path must be a root relative path that starts with a forward slash '/'.
+        /// </summary>
+        internal static string PathMustBeRootRelativePath
         {
-            return string.Format(CultureInfo.CurrentCulture, GetString("AmbiguousHandler"), p0, p1);
+            get => GetString("PathMustBeRootRelativePath");
         }
 
         /// <summary>
-        /// Path must be an application relative path that starts with a forward slash '/'.
+        /// Path must be a root relative path that starts with a forward slash '/'.
         /// </summary>
-        internal static string PathMustBeAnAppRelativePath
+        internal static string FormatPathMustBeRootRelativePath()
+            => GetString("PathMustBeRootRelativePath");
+
+        /// <summary>
+        /// If an {0} provides a result value by setting the {1} property of {2} to a non-null value, then it cannot call the next filter by invoking {3}.
+        /// </summary>
+        internal static string AsyncPageFilter_InvalidShortCircuit
         {
-            get { return GetString("PathMustBeAnAppRelativePath"); }
+            get => GetString("AsyncPageFilter_InvalidShortCircuit");
         }
 
         /// <summary>
-        /// Path must be an application relative path that starts with a forward slash '/'.
+        /// If an {0} provides a result value by setting the {1} property of {2} to a non-null value, then it cannot call the next filter by invoking {3}.
         /// </summary>
-        internal static string FormatPathMustBeAnAppRelativePath()
+        internal static string FormatAsyncPageFilter_InvalidShortCircuit(object p0, object p1, object p2, object p3)
+            => string.Format(CultureInfo.CurrentCulture, GetString("AsyncPageFilter_InvalidShortCircuit"), p0, p1, p2, p3);
+
+        /// <summary>
+        /// The type '{0}' is not a valid page. A page must inherit from '{1}'.
+        /// </summary>
+        internal static string InvalidPageType_WrongBase
         {
-            return GetString("PathMustBeAnAppRelativePath");
+            get => GetString("InvalidPageType_WrongBase");
         }
+
+        /// <summary>
+        /// The type '{0}' is not a valid page. A page must inherit from '{1}'.
+        /// </summary>
+        internal static string FormatInvalidPageType_WrongBase(object p0, object p1)
+            => string.Format(CultureInfo.CurrentCulture, GetString("InvalidPageType_WrongBase"), p0, p1);
+
+        /// <summary>
+        /// The type '{0}' is not a valid page. A page must define a public, non-static '{1}' property.
+        /// </summary>
+        internal static string InvalidPageType_NoModelProperty
+        {
+            get => GetString("InvalidPageType_NoModelProperty");
+        }
+
+        /// <summary>
+        /// The type '{0}' is not a valid page. A page must define a public, non-static '{1}' property.
+        /// </summary>
+        internal static string FormatInvalidPageType_NoModelProperty(object p0, object p1)
+            => string.Format(CultureInfo.CurrentCulture, GetString("InvalidPageType_NoModelProperty"), p0, p1);
+
+        /// <summary>
+        /// '{0}' is not a valid page name. A page name is path relative to the Razor Pages root directory that starts with a leading forward slash ('/') and does not contain the file extension e.g "/Users/Edit".
+        /// </summary>
+        internal static string InvalidValidPageName
+        {
+            get => GetString("InvalidValidPageName");
+        }
+
+        /// <summary>
+        /// '{0}' is not a valid page name. A page name is path relative to the Razor Pages root directory that starts with a leading forward slash ('/') and does not contain the file extension e.g "/Users/Edit".
+        /// </summary>
+        internal static string FormatInvalidValidPageName(object p0)
+            => string.Format(CultureInfo.CurrentCulture, GetString("InvalidValidPageName"), p0);
+
+        /// <summary>
+        /// The model type for '{0}' is of type '{1}' which is not assignable to its declared model type '{2}'.
+        /// </summary>
+        internal static string InvalidActionDescriptorModelType
+        {
+            get => GetString("InvalidActionDescriptorModelType");
+        }
+
+        /// <summary>
+        /// The model type for '{0}' is of type '{1}' which is not assignable to its declared model type '{2}'.
+        /// </summary>
+        internal static string FormatInvalidActionDescriptorModelType(object p0, object p1, object p2)
+            => string.Format(CultureInfo.CurrentCulture, GetString("InvalidActionDescriptorModelType"), p0, p1, p2);
 
         private static string GetString(string name, params string[] formatterNames)
         {

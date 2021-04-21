@@ -12,10 +12,13 @@ using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Mvc.Internal;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.ObjectPool;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Microsoft.AspNetCore.Mvc.IntegrationTests
@@ -29,13 +32,9 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
         public async Task AuthorizeFilter_CalledTwiceWithNonDefaultProvider()
         {
             // Arrange
-            var applicationModelProviderContext = new ApplicationModelProviderContext(
-                new[] { typeof(AuthorizeController).GetTypeInfo() });
+            var applicationModelProviderContext = GetProviderContext(typeof(AuthorizeController));
 
             var policyProvider = new TestAuthorizationPolicyProvider();
-            var defaultProvider = new DefaultApplicationModelProvider(new TestOptionsManager<MvcOptions>());
-
-            defaultProvider.OnProvidersExecuting(applicationModelProviderContext);
 
             var controller = Assert.Single(applicationModelProviderContext.Result.Controllers);
             var action = Assert.Single(controller.Actions);
@@ -54,23 +53,70 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.Equal(2, policyProvider.GetPolicyCount);
         }
 
-        private HttpContext GetHttpContext()
+        // This is a test for security, because we can't assume that any IAuthorizationPolicyProvider other than
+        // DefaultAuthorizationPolicyProvider will return the same result for the same input. So a cache could cause
+        // undesired access.
+        [Fact]
+        public async Task CombinedAuthorizeFilter_AlwaysCalledWithNonDefaultProvider()
+        {
+            // Arrange
+            var applicationModelProviderContext = GetProviderContext(typeof(AuthorizeController));
+
+            var policyProvider = new TestAuthorizationPolicyProvider();
+
+            var controller = Assert.Single(applicationModelProviderContext.Result.Controllers);
+            var action = Assert.Single(controller.Actions);
+            var authorizeData = action.Attributes.OfType<AuthorizeAttribute>();
+            var authorizeFilter = new AuthorizeFilter(policyProvider, authorizeData);
+
+            var actionContext = new ActionContext(GetHttpContext(combineAuthorize: true), new RouteData(), new ControllerActionDescriptor());
+
+            var authorizationFilterContext = new AuthorizationFilterContext(actionContext, action.Filters);
+
+            authorizationFilterContext.Filters.Add(authorizeFilter);
+
+            var secondFilter = new AuthorizeFilter(new AuthorizationPolicyBuilder().RequireAssertion(a => true).Build());
+            authorizationFilterContext.Filters.Add(secondFilter);
+
+            var thirdFilter = new AuthorizeFilter(policyProvider, authorizeData);
+            authorizationFilterContext.Filters.Add(thirdFilter);
+
+            // Act
+            await thirdFilter.OnAuthorizationAsync(authorizationFilterContext);
+            await thirdFilter.OnAuthorizationAsync(authorizationFilterContext);
+
+            // Assert
+            Assert.Equal(4, policyProvider.GetPolicyCount);
+        }
+
+        private HttpContext GetHttpContext(bool combineAuthorize = false)
         {
             var httpContext = new DefaultHttpContext();
 
-            httpContext.RequestServices = GetServices();
+            httpContext.RequestServices = GetServices(combineAuthorize);
             return httpContext;
         }
 
-        private static IServiceProvider GetServices()
+        private static ApplicationModelProviderContext GetProviderContext(Type controllerType)
+        {
+            var context = new ApplicationModelProviderContext(new[] { controllerType.GetTypeInfo() });
+            var provider = new DefaultApplicationModelProvider(
+                Options.Create(new MvcOptions()),
+                TestModelMetadataProvider.CreateDefaultProvider());
+            provider.OnProvidersExecuting(context);
+
+            return context;
+        }
+
+        private static IServiceProvider GetServices(bool combineAuthorize)
         {
             var serviceCollection = new ServiceCollection();
             serviceCollection.AddAuthorization();
-            serviceCollection.AddMvc();
+            serviceCollection.AddMvc(o => o.AllowCombiningAuthorizeFilters = combineAuthorize);
             serviceCollection
-                .AddTransient<ILoggerFactory, LoggerFactory>()
-                .AddTransient<ILogger<DefaultAuthorizationService>, Logger<DefaultAuthorizationService>>();
-
+                .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+                .AddTransient<ILogger<DefaultAuthorizationService>, Logger<DefaultAuthorizationService>>()
+                .AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>();
             return serviceCollection.BuildServiceProvider();
         }
 
@@ -92,6 +138,11 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
                     new AssertionRequirement((con) => { return true; })
                 };
                 return Task.FromResult(new AuthorizationPolicy(requirements, new string[] { }));
+            }
+
+            public Task<AuthorizationPolicy> GetRequiredPolicyAsync()
+            {
+                return Task.FromResult<AuthorizationPolicy>(null);
             }
         }
 

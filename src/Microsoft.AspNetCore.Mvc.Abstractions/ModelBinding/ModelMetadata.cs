@@ -38,12 +38,13 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         }
 
         /// <summary>
-        /// Gets the container type of this metadata if it represents a property, otherwise <c>null</c>.
+        /// Gets the type containing the property if this metadata is for a property; <see langword="null"/> otherwise.
         /// </summary>
-        public Type ContainerType { get { return Identity.ContainerType; } }
+        public Type ContainerType => Identity.ContainerType;
 
         /// <summary>
-        /// Gets the metadata of the container type that the current instance is part of.
+        /// Gets the metadata for <see cref="ContainerType"/> if this metadata is for a property;
+        /// <see langword="null"/> otherwise.
         /// </summary>
         public virtual ModelMetadata ContainerMetadata
         {
@@ -52,27 +53,32 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
                 throw new NotImplementedException();
             }
         }
-        
+
         /// <summary>
         /// Gets a value indicating the kind of metadata element represented by the current instance.
         /// </summary>
-        public ModelMetadataKind MetadataKind { get { return Identity.MetadataKind; } }
+        public ModelMetadataKind MetadataKind => Identity.MetadataKind;
 
         /// <summary>
         /// Gets the model type represented by the current instance.
         /// </summary>
-        public Type ModelType { get { return Identity.ModelType; } }
+        public Type ModelType => Identity.ModelType;
 
         /// <summary>
-        /// Gets the property name represented by the current instance.
+        /// Gets the name of the parameter or property if this metadata is for a parameter or property;
+        /// <see langword="null"/> otherwise i.e. if this is the metadata for a type.
         /// </summary>
-        public string PropertyName
-        {
-            get
-            {
-                return Identity.Name;
-            }
-        }
+        public string Name => Identity.Name;
+
+        /// <summary>
+        /// Gets the name of the parameter if this metadata is for a parameter; <see langword="null"/> otherwise.
+        /// </summary>
+        public string ParameterName => MetadataKind == ModelMetadataKind.Parameter ? Identity.Name : null;
+
+        /// <summary>
+        /// Gets the name of the property if this metadata is for a property; <see langword="null"/> otherwise.
+        /// </summary>
+        public string PropertyName => MetadataKind == ModelMetadataKind.Property ? Identity.Name : null;
 
         /// <summary>
         /// Gets the key for the current instance.
@@ -256,9 +262,9 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         public abstract bool IsRequired { get; }
 
         /// <summary>
-        /// Gets the <see cref="IModelBindingMessageProvider"/> instance.
+        /// Gets the <see cref="Metadata.ModelBindingMessageProvider"/> instance.
         /// </summary>
-        public abstract IModelBindingMessageProvider ModelBindingMessageProvider { get; }
+        public abstract ModelBindingMessageProvider ModelBindingMessageProvider { get; }
 
         /// <summary>
         /// Gets a value indicating where the current metadata should be ordered relative to other properties
@@ -320,6 +326,15 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         public abstract bool ValidateChildren { get; }
 
         /// <summary>
+        /// Gets a value that indicates if the model, or one of it's properties, or elements has associatated validators.
+        /// </summary>
+        /// <remarks>
+        /// When <see langword="false"/>, validation can be assume that the model is valid (<see cref="ModelValidationState.Valid"/>) without
+        /// inspecting the object graph.
+        /// </remarks>
+        public virtual bool? HasValidators { get; }
+
+        /// <summary>
         /// Gets a collection of metadata items for validators.
         /// </summary>
         public abstract IReadOnlyList<object> ValidatorMetadata { get; }
@@ -331,11 +346,12 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         public Type ElementType { get; private set; }
 
         /// <summary>
-        /// Gets a value indicating whether <see cref="ModelType"/> is a simple type.
+        /// Gets a value indicating whether <see cref="ModelType"/> is a complex type.
         /// </summary>
         /// <remarks>
-        /// A simple type is defined as a <see cref="Type"/> which has a
-        /// <see cref="System.ComponentModel.TypeConverter"/> that can convert from <see cref="string"/>.
+        /// A complex type is defined as a <see cref="Type"/> without a <see cref="TypeConverter"/> that can convert
+        /// from <see cref="string"/>. Most POCO and <see cref="IEnumerable"/> types are therefore complex. Most, if
+        /// not all, BCL value types are simple types.
         /// </remarks>
         public bool IsComplexType { get; private set; }
 
@@ -390,12 +406,12 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         /// </summary>
         /// <remarks>
         /// <see cref="GetDisplayName()"/> will return the first of the following expressions which has a
-        /// non-<c>null</c> value: <c>DisplayName</c>, <c>PropertyName</c>, <c>ModelType.Name</c>.
+        /// non-<see langword="null"/> value: <see cref="DisplayName"/>, <see cref="Name"/>, or <c>ModelType.Name</c>.
         /// </remarks>
         /// <returns>The display name.</returns>
         public string GetDisplayName()
         {
-            return DisplayName ?? PropertyName ?? ModelType.Name;
+            return DisplayName ?? Name ?? ModelType.Name;
         }
 
         /// <inheritdoc />
@@ -419,13 +435,13 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
         /// <inheritdoc />
         public override bool Equals(object obj)
         {
-            return base.Equals(obj as ModelMetadata);
+            return Equals(obj as ModelMetadata);
         }
 
         /// <inheritdoc />
         public override int GetHashCode()
         {
-            // Normaly caching the hashcode would be dangerous, but Identity is deeply immutable so this is safe.
+            // Normally caching the hashcode would be dangerous, but Identity is deeply immutable so this is safe.
             if (_hashCode == null)
             {
                 _hashCode = Identity.GetHashCode();
@@ -476,13 +492,16 @@ namespace Microsoft.AspNetCore.Mvc.ModelBinding
 
         private string DebuggerToString()
         {
-            if (Identity.MetadataKind == ModelMetadataKind.Type)
+            switch (MetadataKind)
             {
-                return $"ModelMetadata (Type: '{ModelType.Name}')";
-            }
-            else
-            {
-                return $"ModelMetadata (Property: '{ContainerType.Name}.{PropertyName}' Type: '{ModelType.Name}')";
+                case ModelMetadataKind.Parameter:
+                    return $"ModelMetadata (Parameter: '{ParameterName}' Type: '{ModelType.Name}')";
+                case ModelMetadataKind.Property:
+                    return $"ModelMetadata (Property: '{ContainerType.Name}.{PropertyName}' Type: '{ModelType.Name}')";
+                case ModelMetadataKind.Type:
+                    return $"ModelMetadata (Type: '{ModelType.Name}')";
+                default:
+                    return $"Unsupported MetadataKind '{MetadataKind}'.";
             }
         }
 

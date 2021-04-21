@@ -12,12 +12,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.Internal;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Mvc.TestCommon;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.AspNetCore.Mvc.ViewFeatures.Internal;
+using Microsoft.AspNetCore.Mvc.ViewFeatures.Buffers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -105,7 +104,10 @@ namespace Microsoft.AspNetCore.Mvc
         public async Task ExecuteResultAsync_Throws_IfViewComponentCouldNotBeFound_ByName()
         {
             // Arrange
-            var expected = "A view component named 'Text' could not be found.";
+            var expected = "A view component named 'Text' could not be found. A view component must be " +
+                "a public non-abstract class, not contain any generic parameters, and either be decorated " +
+                "with 'ViewComponentAttribute' or have a class name ending with the 'ViewComponent' suffix. " +
+                "A view component must not be decorated with 'NonViewComponentAttribute'.";
 
             var actionContext = CreateActionContext();
 
@@ -125,7 +127,10 @@ namespace Microsoft.AspNetCore.Mvc
         public async Task ExecuteResultAsync_Throws_IfViewComponentCouldNotBeFound_ByType()
         {
             // Arrange
-            var expected = $"A view component named '{typeof(TextViewComponent).FullName}' could not be found.";
+            var expected = $"A view component named '{typeof(TextViewComponent).FullName}' could not be found. " +
+                "A view component must be a public non-abstract class, not contain any generic parameters, and either be decorated " +
+                "with 'ViewComponentAttribute' or have a class name ending with the 'ViewComponent' suffix. " +
+                "A view component must not be decorated with 'NonViewComponentAttribute'.";
 
             var actionContext = CreateActionContext();
             var services = CreateServices(diagnosticListener: null, context: actionContext.HttpContext);
@@ -555,10 +560,10 @@ namespace Microsoft.AspNetCore.Mvc
             }
 
             var services = new ServiceCollection();
-            services.AddSingleton<DiagnosticSource>(diagnosticSource);
+            services.AddSingleton<DiagnosticListener>(diagnosticSource);
             services.AddSingleton<ViewComponentInvokerCache>();
             services.AddSingleton<ExpressionTextCache>();
-            services.AddSingleton<IOptions<MvcViewOptions>, TestOptionsManager<MvcViewOptions>>();
+            services.AddSingleton(Options.Create(new MvcViewOptions()));
             services.AddTransient<IViewComponentHelper, DefaultViewComponentHelper>();
             services.AddSingleton<IViewComponentSelector, DefaultViewComponentSelector>();
             services.AddSingleton<IViewComponentDescriptorCollectionProvider, DefaultViewComponentDescriptorCollectionProvider>();
@@ -573,7 +578,7 @@ namespace Microsoft.AspNetCore.Mvc
             services.AddSingleton<ITempDataProvider, SessionStateTempDataProvider>();
             services.AddSingleton<HtmlEncoder, HtmlTestEncoder>();
             services.AddSingleton<IViewBufferScope, TestViewBufferScope>();
-            services.AddSingleton<ViewComponentResultExecutor>();
+            services.AddSingleton<IActionResultExecutor<ViewComponentResult>, ViewComponentResultExecutor>();
 
             return services;
         }

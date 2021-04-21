@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,14 +19,14 @@ namespace FormatterWebSite
 
                 options.InputFormatters.Add(new StringInputFormatter());
             })
-            .AddXmlDataContractSerializerFormatters();
-        }
+            .AddXmlDataContractSerializerFormatters()
+            .SetCompatibilityVersion(CompatibilityVersion.Latest);
 
+            services.Configure<MvcJsonOptions>(options => { options.SerializerSettings.Converters.Insert(0, new IModelConverter()); });
+        }
 
         public void Configure(IApplicationBuilder app)
         {
-            app.UseCultureReplacer();
-
             app.UseMvc(routes =>
             {
                 routes.MapRoute("ActionAsMethod", "{controller}/{action}",

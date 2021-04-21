@@ -6,7 +6,6 @@ using System.IO;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.AspNetCore.Mvc.ViewFeatures.Internal;
 
 namespace Microsoft.AspNetCore.Mvc.Rendering
 {
@@ -144,7 +143,7 @@ namespace Microsoft.AspNetCore.Mvc.Rendering
         /// </summary>
         public virtual FormContext FormContext
         {
-            get { return _formContext; }
+            get => _formContext;
 
             set
             {

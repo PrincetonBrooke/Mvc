@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Builder.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.AspNetCore.Mvc.Internal
+namespace Microsoft.AspNetCore.Mvc.Filters
 {
     public class MiddlewareFilterAttributeTest
     {
@@ -25,7 +25,7 @@ namespace Microsoft.AspNetCore.Mvc.Internal
             Pipeline1.ConfigurePipeline = (ab) =>
             {
                 configureCallCount++;
-                ab.Use((httpCtxt, next) =>
+                ab.Use((httpContext, next) =>
                 {
                     return next();
                 });

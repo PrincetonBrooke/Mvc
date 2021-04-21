@@ -3,7 +3,6 @@
 
 using System;
 using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Mvc.DataAnnotations.Internal;
 using Microsoft.Extensions.Localization;
 
 namespace Microsoft.AspNetCore.Mvc.DataAnnotations
@@ -73,6 +72,10 @@ namespace Microsoft.AspNetCore.Mvc.DataAnnotations
             else if (type == typeof(UrlAttribute))
             {
                 adapter = new DataTypeAttributeAdapter((DataTypeAttribute)attribute, "data-val-url", stringLocalizer);
+            }
+            else if (type == typeof(FileExtensionsAttribute))
+            {
+                adapter = new FileExtensionsAttributeAdapter((FileExtensionsAttribute)attribute, stringLocalizer);
             }
             else
             {

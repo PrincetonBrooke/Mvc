@@ -5,7 +5,6 @@ using System;
 using System.Globalization;
 using System.Text;
 using Microsoft.AspNetCore.Mvc.Core;
-using Microsoft.AspNetCore.Mvc.Formatters.Internal;
 using Microsoft.Extensions.Primitives;
 
 namespace Microsoft.AspNetCore.Mvc.Formatters
@@ -13,11 +12,11 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
     /// <summary>
     /// A media type value.
     /// </summary>
-    public struct MediaType
+    public readonly struct MediaType
     {
         private static readonly StringSegment QualityParameter = new StringSegment("q");
 
-        private MediaTypeParameterParser _parameterParser;
+        private readonly MediaTypeParameterParser _parameterParser;
 
         /// <summary>
         /// Initializes a <see cref="MediaType"/> instance.
@@ -67,15 +66,16 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
                     throw new ArgumentException(Resources.FormatArgument_InvalidOffsetLength(nameof(offset), nameof(length)));
                 }
             }
-            
+
             _parameterParser = default(MediaTypeParameterParser);
 
-            StringSegment type;
-            var typeLength = GetTypeLength(mediaType, offset, out type);
+            var typeLength = GetTypeLength(mediaType, offset, out var type);
             if (typeLength == 0)
             {
                 Type = new StringSegment();
                 SubType = new StringSegment();
+                SubTypeWithoutSuffix = new StringSegment();
+                SubTypeSuffix = new StringSegment();
                 return;
             }
             else
@@ -83,16 +83,28 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
                 Type = type;
             }
 
-            StringSegment subType;
-            var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, out subType);
+            var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, out var subType);
             if (subTypeLength == 0)
             {
                 SubType = new StringSegment();
+                SubTypeWithoutSuffix = new StringSegment();
+                SubTypeSuffix = new StringSegment();
                 return;
             }
             else
             {
                 SubType = subType;
+
+                if (TryGetSuffixLength(subType, out var subtypeSuffixLength))
+                {
+                    SubTypeWithoutSuffix = subType.Subsegment(0, subType.Length - subtypeSuffixLength - 1);
+                    SubTypeSuffix = subType.Subsegment(subType.Length - subtypeSuffixLength, subtypeSuffixLength);
+                }
+                else
+                {
+                    SubTypeWithoutSuffix = SubType;
+                    SubTypeSuffix = new StringSegment();
+                }
             }
 
             _parameterParser = new MediaTypeParameterParser(mediaType, offset + typeLength + subTypeLength, length);
@@ -158,9 +170,29 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
             return current - offset;
         }
 
+        private static bool TryGetSuffixLength(StringSegment subType, out int suffixLength)
+        {
+            // Find the last instance of '+', if there is one
+            var startPos = subType.Offset + subType.Length - 1;
+            for (var currentPos = startPos; currentPos >= subType.Offset; currentPos--)
+            {
+                if (subType.Buffer[currentPos] == '+')
+                {
+                    suffixLength = startPos - currentPos;
+                    return true;
+                }
+            }
+
+            suffixLength = 0;
+            return false;
+        }
+
         /// <summary>
         /// Gets the type of the <see cref="MediaType"/>.
         /// </summary>
+        /// <example>
+        /// For the media type <c>"application/json"</c>, this property gives the value <c>"application"</c>.
+        /// </example>
         public StringSegment Type { get; }
 
         /// <summary>
@@ -171,12 +203,51 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
         /// <summary>
         /// Gets the subtype of the <see cref="MediaType"/>.
         /// </summary>
-        public StringSegment SubType { get; private set; }
+        /// <example>
+        /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
+        /// <c>"vnd.example+json"</c>.
+        /// </example>
+        public StringSegment SubType { get; }
+
+        /// <summary>
+        /// Gets the subtype of the <see cref="MediaType"/>, excluding any structured syntax suffix.
+        /// </summary>
+        /// <example>
+        /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
+        /// <c>"vnd.example"</c>.
+        /// </example>
+        public StringSegment SubTypeWithoutSuffix { get; }
+
+        /// <summary>
+        /// Gets the structured syntax suffix of the <see cref="MediaType"/> if it has one.
+        /// </summary>
+        /// <example>
+        /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
+        /// <c>"json"</c>.
+        /// </example>
+        public StringSegment SubTypeSuffix { get; }
 
         /// <summary>
         /// Gets whether this <see cref="MediaType"/> matches all subtypes.
         /// </summary>
+        /// <example>
+        /// For the media type <c>"application/*"</c>, this property is <c>true</c>.
+        /// </example>
+        /// <example>
+        /// For the media type <c>"application/json"</c>, this property is <c>false</c>.
+        /// </example>
         public bool MatchesAllSubTypes => SubType.Equals("*", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets whether this <see cref="MediaType"/> matches all subtypes, ignoring any structured syntax suffix.
+        /// </summary>
+        /// <example>
+        /// For the media type <c>"application/*+json"</c>, this property is <c>true</c>.
+        /// </example>
+        /// <example>
+        /// For the media type <c>"application/vnd.example+json"</c>, this property is <c>false</c>.
+        /// </example>
+        public bool MatchesAllSubTypesWithoutSuffix => SubTypeWithoutSuffix.Equals("*", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Gets the <see cref="System.Text.Encoding"/> of the <see cref="MediaType"/> if it has one.
@@ -189,6 +260,22 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
         public StringSegment Charset => GetParameter("charset");
 
         /// <summary>
+        /// Determines whether the current <see cref="MediaType"/> contains a wildcard.
+        /// </summary>
+        /// <returns>
+        /// <c>true</c> if this <see cref="MediaType"/> contains a wildcard; otherwise <c>false</c>.
+        /// </returns>
+        public bool HasWildcard
+        {
+            get
+            {
+                return MatchesAllTypes ||
+                    MatchesAllSubTypesWithoutSuffix ||
+                    GetParameter("*").Equals("*", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        /// <summary>
         /// Determines whether the current <see cref="MediaType"/> is a subset of the <paramref name="set"/>
         /// <see cref="MediaType"/>.
         /// </summary>
@@ -198,8 +285,8 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
         /// </returns>
         public bool IsSubsetOf(MediaType set)
         {
-            return (set.MatchesAllTypes || set.Type.Equals(Type, StringComparison.OrdinalIgnoreCase)) &&
-                (set.MatchesAllSubTypes || set.SubType.Equals(SubType, StringComparison.OrdinalIgnoreCase)) &&
+            return MatchesType(set) &&
+                MatchesSubtype(set) &&
                 ContainsAllParameters(set._parameterParser);
         }
 
@@ -228,8 +315,7 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
         {
             var parametersParser = _parameterParser;
 
-            MediaTypeParameter parameter;
-            while (parametersParser.ParseNextParameter(out parameter))
+            while (parametersParser.ParseNextParameter(out var parameter))
             {
                 if (parameter.HasName(parameterName))
                 {
@@ -321,8 +407,7 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
             var parser = parsedMediaType._parameterParser;
 
             var quality = 1.0d;
-            MediaTypeParameter parameter;
-            while (parser.ParseNextParameter(out parameter))
+            while (parser.ParseNextParameter(out var parameter))
             {
                 if (parameter.HasName(QualityParameter))
                 {
@@ -372,11 +457,64 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
             return $"{mediaType.Value}; charset={encoding.WebName}";
         }
 
+        private bool MatchesType(MediaType set)
+        {
+            return set.MatchesAllTypes ||
+                set.Type.Equals(Type, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool MatchesSubtype(MediaType set)
+        {
+            if (set.MatchesAllSubTypes)
+            {
+                return true;
+            }
+
+            if (set.SubTypeSuffix.HasValue)
+            {
+                if (SubTypeSuffix.HasValue)
+                {
+                    // Both the set and the media type being checked have suffixes, so both parts must match.
+                    return MatchesSubtypeWithoutSuffix(set) && MatchesSubtypeSuffix(set);
+                }
+                else
+                {
+                    // The set has a suffix, but the media type being checked doesn't. We never consider this to match.
+                    return false;
+                }
+            }
+            else
+            {
+                // If this subtype or suffix matches the subtype of the set,
+                // it is considered a subtype.
+                // Ex: application/json > application/val+json
+                return MatchesEitherSubtypeOrSuffix(set);
+            }
+        }
+
+        private bool MatchesSubtypeWithoutSuffix(MediaType set)
+        {
+            return set.MatchesAllSubTypesWithoutSuffix ||
+                set.SubTypeWithoutSuffix.Equals(SubTypeWithoutSuffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool MatchesSubtypeSuffix(MediaType set)
+        {
+            // We don't have support for wildcards on suffixes alone (e.g., "application/entity+*")
+            // because there's no clear use case for it.
+            return set.SubTypeSuffix.Equals(SubTypeSuffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool MatchesEitherSubtypeOrSuffix(MediaType set)
+        {
+            return set.SubType.Equals(SubType, StringComparison.OrdinalIgnoreCase) ||
+                set.SubType.Equals(SubTypeSuffix, StringComparison.OrdinalIgnoreCase);
+        }
+
         private bool ContainsAllParameters(MediaTypeParameterParser setParameters)
         {
             var parameterFound = true;
-            MediaTypeParameter setParameter;
-            while (setParameters.ParseNextParameter(out setParameter) && parameterFound)
+            while (setParameters.ParseNextParameter(out var setParameter) && parameterFound)
             {
                 if (setParameter.HasName("q"))
                 {
@@ -385,12 +523,18 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
                     break;
                 }
 
+                if (setParameter.HasName("*"))
+                {
+                    // A parameter named "*" has no effect on media type matching, as it is only used as an indication
+                    // that the entire media type string should be treated as a wildcard.
+                    continue;
+                }
+
                 // Copy the parser as we need to iterate multiple times over it.
                 // We can do this because it's a struct
                 var subSetParameters = _parameterParser;
                 parameterFound = false;
-                MediaTypeParameter subSetParameter;
-                while (subSetParameters.ParseNextParameter(out subSetParameter) && !parameterFound)
+                while (subSetParameters.ParseNextParameter(out var subSetParameter) && !parameterFound)
                 {
                     parameterFound = subSetParameter.Equals(setParameter);
                 }
@@ -401,8 +545,8 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
 
         private struct MediaTypeParameterParser
         {
-            private string _mediaTypeBuffer;
-            private int? _length;
+            private readonly string _mediaTypeBuffer;
+            private readonly int? _length;
 
             public MediaTypeParameterParser(string mediaTypeBuffer, int offset, int? length)
             {
@@ -445,19 +589,28 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
                     return 0;
                 }
 
-                StringSegment name;
-                var nameLength = GetNameLength(input, startIndex, out name);
+                var nameLength = GetNameLength(input, startIndex, out var name);
 
                 var current = startIndex + nameLength;
 
                 if (nameLength == 0 || OffsetIsOutOfRange(current, input.Length) || input[current] != '=')
                 {
-                    parsedValue = default(MediaTypeParameter);
-                    return 0;
+                    if (current == input.Length && name.Equals("*", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // As a special case, we allow a trailing ";*" to indicate a wildcard
+                        // string allowing any other parameters. It's the same as ";*=*".
+                        var asterisk = new StringSegment("*");
+                        parsedValue = new MediaTypeParameter(asterisk, asterisk);
+                        return current - startIndex;
+                    }
+                    else
+                    {
+                        parsedValue = default(MediaTypeParameter);
+                        return 0;
+                    }
                 }
 
-                StringSegment value;
-                var valueLength = GetValueLength(input, current, out value);
+                var valueLength = GetValueLength(input, current, out var value);
 
                 parsedValue = new MediaTypeParameter(name, value);
                 current +=  valueLength;
@@ -527,11 +680,8 @@ namespace Microsoft.AspNetCore.Mvc.Formatters
             }
         }
 
-        private struct MediaTypeParameter : IEquatable<MediaTypeParameter>
+        private readonly struct MediaTypeParameter : IEquatable<MediaTypeParameter>
         {
-            public static readonly StringSegment Type = new StringSegment("type");
-            public static readonly StringSegment Subtype = new StringSegment("subtype");
-
             public MediaTypeParameter(StringSegment name, StringSegment value)
             {
                 Name = name;

@@ -1,40 +1,35 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\..\build\common.props" />
+﻿<Project Sdk="Internal.AspNetCore.Sdk">
+  <Import Project="..\..\src\Microsoft.AspNetCore.Mvc.Testing\Microsoft.AspNetCore.Mvc.Testing.targets" />
 
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp1.1;net452</TargetFrameworks>
-    <TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">netcoreapp1.1</TargetFrameworks>
-    <PackageTargetFallback Condition=" '$(TargetFramework)' == 'netcoreapp1.1' ">$(PackageTargetFallback);portable-net451+win8</PackageTargetFallback>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
 
     <DefineConstants Condition="'$(GenerateBaselines)'=='true'">$(DefineConstants);GENERATE_BASELINES</DefineConstants>
     <DefineConstants>$(DefineConstants);__RemoveThisBitTo__GENERATE_BASELINES</DefineConstants>
-    <DefineConstants>$(DefineConstants);FUNCTIONAL_TESTS</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(TargetFramework)' != 'netcoreapp1.1' ">
-    <!-- Work around https://github.com/dotnet/sdk/issues/926. Align with bitness of the web site projects. -->
-    <PlatformTarget>x86</PlatformTarget>
-
-    <!--
-      Work around https://github.com/Microsoft/vstest/issues/428 aka https://github.com/aspnet/Mvc/issues/5873.
-      Create the appropriate binding redirects.
-    -->
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\Microsoft.AspNetCore.Mvc.Formatters.Xml.Test\XmlAssert.cs" />
     <EmbeddedResource Include="compiler\resources\**\*" />
-
-    <!--
-      Work around https://github.com/Microsoft/vstest/issues/196. Execute tests with assemblies in the bin folder, not
-      a temporary location. Unable to find the web site project folders otherwise.
-    -->
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- For testing the testing infrastructure only -->
+    <WebApplicationFactoryContentRootAttribute Include="BasicWebSite" AssemblyName="BasicWebsite" ContentRootPath="../../../../WebSites/BasicWebSite" ContentRootTest="BasicWebSite.csproj" Priority="-1" />
+    <!-- For testing the testing infrastructure only. This attribute is
+     incorrect by design to ensure that the infrastructure falls back. -->
+    <WebApplicationFactoryContentRootAttribute Include="FiltersWebSite" AssemblyName="FiltersWebSite" ContentRootPath="/../WebSites/FiltersWebSite" ContentRootTest="Incorrect.csproj" Priority="-1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Microsoft.AspNetCore.Mvc.Testing\Microsoft.AspNetCore.Mvc.Testing.csproj" />
+    <ProjectReference Include="..\..\benchmarkapps\BasicApi\BasicApi.csproj" />
+    <ProjectReference Include="..\..\benchmarkapps\BasicViews\BasicViews.csproj" />
+    <ProjectReference Include="..\..\samples\MvcSandbox\MvcSandbox.csproj" />
+
+    <ProjectReference Include="..\Microsoft.AspNetCore.Mvc.Core.TestCommon\Microsoft.AspNetCore.Mvc.Core.TestCommon.csproj" />
+
     <ProjectReference Include="..\WebSites\ApiExplorerWebSite\ApiExplorerWebSite.csproj" />
     <ProjectReference Include="..\WebSites\ApplicationModelWebSite\ApplicationModelWebSite.csproj" />
     <ProjectReference Include="..\WebSites\BasicWebSite\BasicWebSite.csproj" />
@@ -42,12 +37,9 @@
     <ProjectReference Include="..\WebSites\CorsWebSite\CorsWebSite.csproj" />
     <ProjectReference Include="..\WebSites\ErrorPageMiddlewareWebSite\ErrorPageMiddlewareWebSite.csproj" />
     <ProjectReference Include="..\WebSites\FilesWebSite\FilesWebSite.csproj" />
-    <ProjectReference Include="..\WebSites\FiltersWebSite\FiltersWebSite.csproj" />
     <ProjectReference Include="..\WebSites\FormatterWebSite\FormatterWebSite.csproj" />
     <ProjectReference Include="..\WebSites\HtmlGenerationWebSite\HtmlGenerationWebSite.csproj" />
-    <ProjectReference Include="..\Microsoft.AspNetCore.Mvc.TestCommon\Microsoft.AspNetCore.Mvc.TestCommon.csproj" />
-    <ProjectReference Include="..\..\samples\MvcSandbox\MvcSandbox.csproj" />
-    <ProjectReference Include="..\WebSites\RazorPageExecutionInstrumentationWebSite\RazorPageExecutionInstrumentationWebSite.csproj" />
+    <ProjectReference Include="..\WebSites\RazorBuildWebSite\RazorBuildWebSite.csproj" />
     <ProjectReference Include="..\WebSites\RazorPagesWebSite\RazorPagesWebSite.csproj" />
     <ProjectReference Include="..\WebSites\RazorWebSite\RazorWebSite.csproj" />
     <ProjectReference Include="..\WebSites\RoutingWebSite\RoutingWebSite.csproj" />
@@ -55,32 +47,20 @@
     <ProjectReference Include="..\WebSites\SimpleWebSite\SimpleWebSite.csproj" />
     <ProjectReference Include="..\WebSites\TagHelpersWebSite\TagHelpersWebSite.csproj" />
     <ProjectReference Include="..\WebSites\VersioningWebSite\VersioningWebSite.csproj" />
-    <ProjectReference Include="..\WebSites\WebApiCompatShimWebSite\WebApiCompatShimWebSite.csproj" />
     <ProjectReference Include="..\WebSites\XmlFormattersWebSite\XmlFormattersWebSite.csproj" />
 
-    <PackageReference Include="Microsoft.AspNetCore.ChunkingCookieManager.Sources" Version="$(AspNetCoreVersion)" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Testing" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSdkVersion)" />
-    <PackageReference Include="xunit" Version="$(XunitVersion)" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="$(XunitVersion)" />
+    <PackageReference Include="AngleSharp" Version="$(AngleSharpPackageVersion)" />
+    <PackageReference Include="Microsoft.AspNet.WebApi.Client" Version="$(MicrosoftAspNetWebApiClientPackageVersion)" />
+    <PackageReference Include="Microsoft.AspNetCore.ChunkingCookieManager.Sources" PrivateAssets="All" Version="$(MicrosoftAspNetCoreChunkingCookieManagerSourcesPackageVersion)" />
+
+    <!--
+      Explicitly referencing routing here to make it easy to integrate breaking changes. Localization.Routing brings in a transitive
+      reference to routing, which makes it hard to work with builds from a feature branch.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Routing.Abstractions" Version="$(MicrosoftAspNetCoreRoutingAbstractionsPackageVersion)" NoWarn="NU1605" />
+    <PackageReference Include="Microsoft.AspNetCore.Routing" Version="$(MicrosoftAspNetCoreRoutingPackageVersion)" NoWarn="NU1605" />
+
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostPackageVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Testing" Version="$(MicrosoftExtensionsLoggingTestingPackageVersion)" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Service Include="{82a7f48d-3b50-4b1e-b82e-3ada8210c358}" />
-  </ItemGroup>
-
-  <!--
-    Work around https://github.com/NuGet/Home/issues/4412. MVC uses DependencyContext.Load() which looks next to a .dll
-    for a .deps.json. Information isn't available elsewhere. Need the .deps.json file for all web site applications.
-  -->
-  <Target Name="CopyDepsFiles" AfterTargets="Build" Condition="'$(TargetFramework)'!=''">
-    <ItemGroup>
-      <DepsFilePaths Include="$([System.IO.Path]::ChangeExtension('%(_ResolvedProjectReferencePaths.FullPath)', '.deps.json'))" />
-    </ItemGroup>
-
-    <Copy SourceFiles="%(DepsFilePaths.FullPath)" DestinationFolder="$(OutputPath)" Condition="Exists('%(DepsFilePaths.FullPath)')" />
-  </Target>
 </Project>

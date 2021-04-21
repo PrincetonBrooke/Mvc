@@ -11,6 +11,7 @@ using Xunit;
 
 namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
 {
+#pragma warning disable CS0618 // Type or member is obsolete
     public class ViewsFeatureProviderTest
     {
         [Fact]
@@ -27,7 +28,7 @@ namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
             applicationPartManager.PopulateFeature(feature);
 
             // Assert
-            Assert.Empty(feature.Views);
+            Assert.Empty(feature.ViewDescriptors);
         }
 
         [Fact]
@@ -36,10 +37,23 @@ namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
             // Arrange
             var part1 = new AssemblyPart(typeof(object).GetTypeInfo().Assembly);
             var part2 = new AssemblyPart(GetType().GetTypeInfo().Assembly);
-            var featureProvider = new TestableViewsFeatureProvider(new Dictionary<AssemblyPart, Type>
+            var featureProvider = new TestableViewsFeatureProvider(new Dictionary<AssemblyPart, IEnumerable<RazorViewAttribute>>
             {
-                { part1, typeof(ViewInfoContainer1) },
-                { part2, typeof(ViewInfoContainer2) },
+                {
+                    part1,
+                    new[]
+                    {
+                        new RazorViewAttribute("/Views/test/Index.cshtml", typeof(object)),
+                    }
+                },
+                {
+                    part2,
+                    new[]
+                    {
+                        new RazorViewAttribute("/Areas/Admin/Views/Index.cshtml", typeof(string)),
+                        new RazorViewAttribute("/Areas/Admin/Views/About.cshtml", typeof(int)),
+                    }
+                },
             });
 
             var applicationPartManager = new ApplicationPartManager();
@@ -52,22 +66,56 @@ namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
             applicationPartManager.PopulateFeature(feature);
 
             // Assert
-            Assert.Collection(feature.Views.OrderBy(f => f.Key, StringComparer.Ordinal),
+            Assert.Collection(feature.ViewDescriptors.OrderBy(f => f.RelativePath, StringComparer.Ordinal),
                 view =>
                 {
-                    Assert.Equal("/Areas/Admin/Views/About.cshtml", view.Key);
-                    Assert.Equal(typeof(int), view.Value);
+                    Assert.Equal("/Areas/Admin/Views/About.cshtml", view.RelativePath);
+                    Assert.Equal(typeof(int), view.ViewAttribute.ViewType);
                 },
                 view =>
                 {
-                    Assert.Equal("/Areas/Admin/Views/Index.cshtml", view.Key);
-                    Assert.Equal(typeof(string), view.Value);
+                    Assert.Equal("/Areas/Admin/Views/Index.cshtml", view.RelativePath);
+                    Assert.Equal(typeof(string), view.ViewAttribute.ViewType);
                 },
                 view =>
                 {
-                    Assert.Equal("/Views/test/Index.cshtml", view.Key);
-                    Assert.Equal(typeof(object), view.Value);
+                    Assert.Equal("/Views/test/Index.cshtml", view.RelativePath);
+                    Assert.Equal(typeof(object), view.ViewAttribute.ViewType);
                 });
+        }
+
+        [Fact]
+        public void PopulateFeature_ThrowsIfSingleAssemblyContainsMultipleAttributesWithTheSamePath()
+        {
+            // Arrange
+            var path1 = "/Views/test/Index.cshtml";
+            var path2 = "/views/test/index.cshtml";
+            var expected = string.Join(
+                Environment.NewLine,
+                "The following precompiled view paths differ only in case, which is not supported:",
+                path1,
+                path2);
+            var part = new AssemblyPart(typeof(object).GetTypeInfo().Assembly);
+            var featureProvider = new TestableViewsFeatureProvider(new Dictionary<AssemblyPart, IEnumerable<RazorViewAttribute>>
+            {
+                {
+                    part,
+                    new[]
+                    {
+                        new RazorViewAttribute(path1, typeof(object)),
+                        new RazorViewAttribute(path2, typeof(object)),
+                    }
+                },
+            });
+
+            var applicationPartManager = new ApplicationPartManager();
+            applicationPartManager.ApplicationParts.Add(part);
+            applicationPartManager.FeatureProviders.Add(featureProvider);
+            var feature = new ViewsFeature();
+
+            // Act & Assert
+            var ex = Assert.Throws<InvalidOperationException>(() => applicationPartManager.PopulateFeature(feature));
+            Assert.Equal(expected, ex.Message);
         }
 
         [Fact]
@@ -87,10 +135,9 @@ namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
             applicationPartManager.PopulateFeature(feature);
 
             // Assert
-            Assert.Empty(feature.Views);
+            Assert.Empty(feature.ViewDescriptors);
         }
 
-#if !NETCOREAPP1_1
         [Fact]
         public void PopulateFeature_DoesNotFail_IfAssemblyHasEmptyLocation()
         {
@@ -105,47 +152,24 @@ namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
             applicationPartManager.PopulateFeature(feature);
 
             // Assert
-            Assert.Empty(feature.Views);
+            Assert.Empty(feature.ViewDescriptors);
         }
-#endif
 
         private class TestableViewsFeatureProvider : ViewsFeatureProvider
         {
-            private readonly Dictionary<AssemblyPart, Type> _containerLookup;
+            private readonly Dictionary<AssemblyPart, IEnumerable<RazorViewAttribute>> _attributeLookup;
 
-            public TestableViewsFeatureProvider(Dictionary<AssemblyPart, Type> containerLookup)
+            public TestableViewsFeatureProvider(Dictionary<AssemblyPart, IEnumerable<RazorViewAttribute>> attributeLookup)
             {
-                _containerLookup = containerLookup;
+                _attributeLookup = attributeLookup;
             }
 
-            protected override Type GetViewInfoContainerType(AssemblyPart assemblyPart) =>
-                _containerLookup[assemblyPart];
-        }
-
-        private class ViewInfoContainer1 : ViewInfoContainer
-        {
-            public ViewInfoContainer1()
-                : base(new[]
-                {
-                    new ViewInfo("/Views/test/Index.cshtml", typeof(object))
-                })
+            protected override IEnumerable<RazorViewAttribute> GetViewAttributes(AssemblyPart assemblyPart)
             {
+                return _attributeLookup[assemblyPart];
             }
         }
 
-        private class ViewInfoContainer2 : ViewInfoContainer
-        {
-            public ViewInfoContainer2()
-                : base(new[]
-                {
-                    new ViewInfo("/Areas/Admin/Views/Index.cshtml", typeof(string)),
-                    new ViewInfo("/Areas/Admin/Views/About.cshtml", typeof(int))
-                })
-            {
-            }
-        }
-
-#if !NETCOREAPP1_1
         private class AssemblyWithEmptyLocation : Assembly
         {
             public override string Location => string.Empty;
@@ -168,6 +192,6 @@ namespace Microsoft.AspNetCore.Mvc.Razor.Compilation
                 }
             }
         }
-#endif
     }
+#pragma warning restore CS0618 // Type or member is obsolete
 }

@@ -7,6 +7,12 @@ namespace RazorWebSite.Controllers
 {
     public class EmbeddedViewsController : Controller
     {
-        public IActionResult Index() => View("/Views/EmbeddedHome/Index.cshtml");
+        public IActionResult Index() => null;
+
+        public IActionResult LookupByName() => View("Index");
+
+        public IActionResult LookupByPath() => View("/Views/EmbeddedViews/Index.cshtml");
+
+        public IActionResult RelativeNonPath() => View();
     }
 }

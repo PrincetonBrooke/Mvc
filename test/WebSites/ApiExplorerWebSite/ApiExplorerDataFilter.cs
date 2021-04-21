@@ -28,8 +28,8 @@ namespace ApiExplorerWebSite
 
         public void OnResourceExecuting(ResourceExecutingContext context)
         {
-            var controllerActionDescriptor = context.ActionDescriptor as ControllerActionDescriptor;
-            if (controllerActionDescriptor != null && controllerActionDescriptor.MethodInfo.IsDefined(typeof(PassThruAttribute)))
+            if (context.ActionDescriptor is ControllerActionDescriptor controllerActionDescriptor &&
+                controllerActionDescriptor.MethodInfo.IsDefined(typeof(PassThruAttribute)))
             {
                 return;
             }
@@ -69,6 +69,8 @@ namespace ApiExplorerWebSite
                     Name = parameter.Name,
                     Source = parameter.Source.Id,
                     Type = parameter.Type?.FullName,
+                    DefaultValue = parameter.DefaultValue?.ToString(),
+                    IsRequired = parameter.IsRequired,
                 };
 
                 if (parameter.RouteInfo != null)
@@ -84,12 +86,22 @@ namespace ApiExplorerWebSite
                 data.ParameterDescriptions.Add(parameterData);
             }
 
+            foreach (var request in description.SupportedRequestFormats)
+            {
+                data.SupportedRequestFormats.Add(new ApiExplorerRequestFormat
+                {
+                    FormatterType = request.Formatter?.GetType().FullName,
+                    MediaType = request.MediaType,
+                });
+            }
+
             foreach (var response in description.SupportedResponseTypes)
             {
                 var responseType = new ApiExplorerResponseType()
                 {
                     StatusCode = response.StatusCode,
-                    ResponseType = response.Type?.FullName
+                    ResponseType = response.Type?.FullName,
+                    IsDefaultResponse = response.IsDefaultResponse,
                 };
 
                 foreach(var responseFormat in response.ApiResponseFormats)
@@ -119,6 +131,8 @@ namespace ApiExplorerWebSite
             public string RelativePath { get; set; }
 
             public List<ApiExplorerResponseType> SupportedResponseTypes { get; } = new List<ApiExplorerResponseType>();
+
+            public List<ApiExplorerRequestFormat> SupportedRequestFormats { get; } = new List<ApiExplorerRequestFormat>();
         }
 
         // Used to serialize data between client and server
@@ -131,6 +145,10 @@ namespace ApiExplorerWebSite
             public string Source { get; set; }
 
             public string Type { get; set; }
+
+            public string DefaultValue { get; set; }
+
+            public bool IsRequired { get; set; }
         }
 
         // Used to serialize data between client and server
@@ -152,9 +170,18 @@ namespace ApiExplorerWebSite
             public string ResponseType { get; set; }
 
             public int StatusCode { get; set; }
+
+            public bool IsDefaultResponse { get; set; }
         }
 
         private class ApiExplorerResponseFormat
+        {
+            public string MediaType { get; set; }
+
+            public string FormatterType { get; set; }
+        }
+
+        private class ApiExplorerRequestFormat
         {
             public string MediaType { get; set; }
 

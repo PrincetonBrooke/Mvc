@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.AspNetCore.Mvc.ViewFeatures.Internal;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 
 namespace Microsoft.AspNetCore.Mvc.TagHelpers
@@ -34,7 +33,10 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                 { "Date", "date" },
                 { "DateTime", "datetime-local" },
                 { "DateTime-local", "datetime-local" },
+                { nameof(DateTimeOffset), "text" },
                 { "Time", "time" },
+                { "Week", "week" },
+                { "Month", "month" },
                 { nameof(Byte), "number" },
                 { nameof(SByte), "number" },
                 { nameof(Int16), "number" },
@@ -57,9 +59,9 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 { "date", "{0:yyyy-MM-dd}" },
-                { "datetime", "{0:yyyy-MM-ddTHH:mm:ss.fffK}" },
-                { "datetime-local", "{0:yyyy-MM-ddTHH:mm:ss.fff}" },
-                { "time", "{0:HH:mm:ss.fff}" },
+                { "datetime", @"{0:yyyy-MM-ddTHH\:mm\:ss.fffK}" },
+                { "datetime-local", @"{0:yyyy-MM-ddTHH\:mm\:ss.fff}" },
+                { "time", @"{0:HH\:mm\:ss.fff}" },
             };
 
         /// <summary>
@@ -72,13 +74,7 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
         }
 
         /// <inheritdoc />
-        public override int Order
-        {
-            get
-            {
-                return -1000;
-            }
-        }
+        public override int Order => -1000;
 
         protected IHtmlGenerator Generator { get; }
 
@@ -117,6 +113,15 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
         public string InputTypeName { get; set; }
 
         /// <summary>
+        /// The name of the &lt;input&gt; element.
+        /// </summary>
+        /// <remarks>
+        /// Passed through to the generated HTML in all cases. Also used to determine whether <see cref="For"/> is
+        /// valid with an empty <see cref="ModelExpression.Name"/>.
+        /// </remarks>
+        public string Name { get; set; }
+
+        /// <summary>
         /// The value of the &lt;input&gt; element.
         /// </summary>
         /// <remarks>
@@ -147,6 +152,11 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
             if (InputTypeName != null)
             {
                 output.CopyHtmlAttribute("type", context);
+            }
+
+            if (Name != null)
+            {
+                output.CopyHtmlAttribute(nameof(Name), context);
             }
 
             if (Value != null)
@@ -186,16 +196,28 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                 output.Attributes.SetAttribute("type", inputType);
             }
 
+            // Ensure Generator does not throw due to empty "fullName" if user provided a name attribute.
+            IDictionary<string, object> htmlAttributes = null;
+            if (string.IsNullOrEmpty(For.Name) &&
+                string.IsNullOrEmpty(ViewContext.ViewData.TemplateInfo.HtmlFieldPrefix) &&
+                !string.IsNullOrEmpty(Name))
+            {
+                htmlAttributes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "name", Name },
+                };
+            }
+
             TagBuilder tagBuilder;
             switch (inputType)
             {
                 case "hidden":
-                    tagBuilder = GenerateHidden(modelExplorer);
+                    tagBuilder = GenerateHidden(modelExplorer, htmlAttributes);
                     break;
 
                 case "checkbox":
-                    GenerateCheckBox(modelExplorer, output);
-                    return;
+                    tagBuilder = GenerateCheckBox(modelExplorer, output, htmlAttributes);
+                    break;
 
                 case "password":
                     tagBuilder = Generator.GeneratePassword(
@@ -203,15 +225,15 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                         modelExplorer,
                         For.Name,
                         value: null,
-                        htmlAttributes: null);
+                        htmlAttributes: htmlAttributes);
                     break;
 
                 case "radio":
-                    tagBuilder = GenerateRadio(modelExplorer);
+                    tagBuilder = GenerateRadio(modelExplorer, htmlAttributes);
                     break;
 
                 default:
-                    tagBuilder = GenerateTextBox(modelExplorer, inputTypeHint, inputType);
+                    tagBuilder = GenerateTextBox(modelExplorer, inputTypeHint, inputType, htmlAttributes);
                     break;
             }
 
@@ -240,8 +262,7 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
         {
             foreach (var hint in GetInputTypeHints(modelExplorer))
             {
-                string inputType;
-                if (_defaultInputTypes.TryGetValue(hint, out inputType))
+                if (_defaultInputTypes.TryGetValue(hint, out var inputType))
                 {
                     inputTypeHint = hint;
                     return inputType;
@@ -252,14 +273,16 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
             return inputTypeHint;
         }
 
-        private void GenerateCheckBox(ModelExplorer modelExplorer, TagHelperOutput output)
+        private TagBuilder GenerateCheckBox(
+            ModelExplorer modelExplorer,
+            TagHelperOutput output,
+            IDictionary<string, object> htmlAttributes)
         {
             if (modelExplorer.ModelType == typeof(string))
             {
                 if (modelExplorer.Model != null)
                 {
-                    bool potentialBool;
-                    if (!bool.TryParse(modelExplorer.Model.ToString(), out potentialBool))
+                    if (!bool.TryParse(modelExplorer.Model.ToString(), out var potentialBool))
                     {
                         throw new InvalidOperationException(Resources.FormatInputTagHelper_InvalidStringResult(
                             ForAttributeName,
@@ -280,56 +303,41 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                        "checkbox"));
             }
 
-            // Prepare to move attributes from current element to <input type="checkbox"/> generated just below.
-            var htmlAttributes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-
-            // Perf: Avoid allocating enumerator
-            // Construct attributes correctly (first attribute wins).
-            for (var i = 0; i < output.Attributes.Count; i++)
+            // hiddenForCheckboxTag always rendered after the returned element
+            var hiddenForCheckboxTag = Generator.GenerateHiddenForCheckbox(ViewContext, modelExplorer, For.Name);
+            if (hiddenForCheckboxTag != null)
             {
-                var attribute = output.Attributes[i];
-                if (!htmlAttributes.ContainsKey(attribute.Name))
+                var renderingMode =
+                    output.TagMode == TagMode.SelfClosing ? TagRenderMode.SelfClosing : TagRenderMode.StartTag;
+                hiddenForCheckboxTag.TagRenderMode = renderingMode;
+                if (!hiddenForCheckboxTag.Attributes.ContainsKey("name") &&
+                    !string.IsNullOrEmpty(Name))
                 {
-                    htmlAttributes.Add(attribute.Name, attribute.Value);
+                    // The checkbox and hidden elements should have the same name attribute value. Attributes will
+                    // match if both are present because both have a generated value. Reach here in the special case
+                    // where user provided a non-empty fallback name.
+                    hiddenForCheckboxTag.MergeAttribute("name", Name);
+                }
+
+                if (ViewContext.FormContext.CanRenderAtEndOfForm)
+                {
+                    ViewContext.FormContext.EndOfFormContent.Add(hiddenForCheckboxTag);
+                }
+                else
+                {
+                    output.PostElement.AppendHtml(hiddenForCheckboxTag);
                 }
             }
 
-            var checkBoxTag = Generator.GenerateCheckBox(
+            return Generator.GenerateCheckBox(
                 ViewContext,
                 modelExplorer,
                 For.Name,
                 isChecked: null,
                 htmlAttributes: htmlAttributes);
-            if (checkBoxTag != null)
-            {
-                // Do not generate current element's attributes or tags. Instead put both <input type="checkbox"/> and
-                // <input type="hidden"/> into the output's Content.
-                output.Attributes.Clear();
-                output.TagName = null;
-
-                var renderingMode =
-                    output.TagMode == TagMode.SelfClosing ? TagRenderMode.SelfClosing : TagRenderMode.StartTag;
-                checkBoxTag.TagRenderMode = renderingMode;
-                output.Content.AppendHtml(checkBoxTag);
-
-                var hiddenForCheckboxTag = Generator.GenerateHiddenForCheckbox(ViewContext, modelExplorer, For.Name);
-                if (hiddenForCheckboxTag != null)
-                {
-                    hiddenForCheckboxTag.TagRenderMode = renderingMode;
-
-                    if (ViewContext.FormContext.CanRenderAtEndOfForm)
-                    {
-                        ViewContext.FormContext.EndOfFormContent.Add(hiddenForCheckboxTag);
-                    }
-                    else
-                    {
-                        output.Content.AppendHtml(hiddenForCheckboxTag);
-                    }
-                }
-            }
         }
 
-        private TagBuilder GenerateRadio(ModelExplorer modelExplorer)
+        private TagBuilder GenerateRadio(ModelExplorer modelExplorer, IDictionary<string, object> htmlAttributes)
         {
             // Note empty string is allowed.
             if (Value == null)
@@ -347,23 +355,41 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                 For.Name,
                 Value,
                 isChecked: null,
-                htmlAttributes: null);
+                htmlAttributes: htmlAttributes);
         }
 
-        private TagBuilder GenerateTextBox(ModelExplorer modelExplorer, string inputTypeHint, string inputType)
+        private TagBuilder GenerateTextBox(
+            ModelExplorer modelExplorer,
+            string inputTypeHint,
+            string inputType,
+            IDictionary<string, object> htmlAttributes)
         {
             var format = Format;
             if (string.IsNullOrEmpty(format))
             {
-                format = GetFormat(modelExplorer, inputTypeHint, inputType);
+                if (!modelExplorer.Metadata.HasNonDefaultEditFormat &&
+                    string.Equals("week", inputType, StringComparison.OrdinalIgnoreCase) &&
+                    (modelExplorer.Model is DateTime || modelExplorer.Model is DateTimeOffset))
+                {
+                    modelExplorer = modelExplorer.GetExplorerForModel(FormatWeekHelper.GetFormattedWeek(modelExplorer));
+                }
+                else
+                {
+                    format = GetFormat(modelExplorer, inputTypeHint, inputType);
+                }
             }
 
-            var htmlAttributes = new Dictionary<string, object>
+            if (htmlAttributes == null)
             {
-                { "type", inputType }
-            };
+                htmlAttributes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            }
 
-            if (string.Equals(inputType, "file") && string.Equals(inputTypeHint, TemplateRenderer.IEnumerableOfIFormFileName))
+            htmlAttributes["type"] = inputType;
+            if (string.Equals(inputType, "file") &&
+                string.Equals(
+                    inputTypeHint,
+                    TemplateRenderer.IEnumerableOfIFormFileName,
+                    StringComparison.OrdinalIgnoreCase))
             {
                 htmlAttributes["multiple"] = "multiple";
             }
@@ -372,45 +398,44 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                 ViewContext,
                 modelExplorer,
                 For.Name,
-                value: modelExplorer.Model,
-                format: format,
-                htmlAttributes: htmlAttributes);
+                modelExplorer.Model,
+                format,
+                htmlAttributes);
         }
 
         // Imitate Generator.GenerateHidden() using Generator.GenerateTextBox(). This adds support for asp-format that
         // is not available in Generator.GenerateHidden().
-        private TagBuilder GenerateHidden(ModelExplorer modelExplorer)
+        private TagBuilder GenerateHidden(ModelExplorer modelExplorer, IDictionary<string, object> htmlAttributes)
         {
             var value = For.Model;
-            var byteArrayValue = value as byte[];
-            if (byteArrayValue != null)
+            if (value is byte[] byteArrayValue)
             {
                 value = Convert.ToBase64String(byteArrayValue);
+            }
+
+            if (htmlAttributes == null)
+            {
+                htmlAttributes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             }
 
             // In DefaultHtmlGenerator(), GenerateTextBox() calls GenerateInput() _almost_ identically to how
             // GenerateHidden() does and the main switch inside GenerateInput() handles InputType.Text and
             // InputType.Hidden identically. No behavior differences at all when a type HTML attribute already exists.
-            var htmlAttributes = new Dictionary<string, object>
-            {
-                { "type", "hidden" }
-            };
+            htmlAttributes["type"] = "hidden";
 
-            return Generator.GenerateTextBox(
-                ViewContext,
-                modelExplorer,
-                For.Name,
-                value: value,
-                format: Format,
-                htmlAttributes: htmlAttributes);
+            return Generator.GenerateTextBox(ViewContext, modelExplorer, For.Name, value, Format, htmlAttributes);
         }
 
         // Get a fall-back format based on the metadata.
         private string GetFormat(ModelExplorer modelExplorer, string inputTypeHint, string inputType)
         {
             string format;
-            string rfc3339Format;
-            if (string.Equals("decimal", inputTypeHint, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals("month", inputType, StringComparison.OrdinalIgnoreCase))
+            {
+                // "month" is a new HTML5 input type that only will be rendered in Rfc3339 mode
+                format = "{0:yyyy-MM}";
+            }
+            else if (string.Equals("decimal", inputTypeHint, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals("text", inputType, StringComparison.Ordinal) &&
                 string.IsNullOrEmpty(modelExplorer.Metadata.EditFormatString))
             {
@@ -418,14 +443,30 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                 // EditFormatString has precedence over this fall-back format.
                 format = "{0:0.00}";
             }
-            else if (_rfc3339Formats.TryGetValue(inputType, out rfc3339Format) &&
-                ViewContext.Html5DateRenderingMode == Html5DateRenderingMode.Rfc3339 &&
+            else if (ViewContext.Html5DateRenderingMode == Html5DateRenderingMode.Rfc3339 &&
                 !modelExplorer.Metadata.HasNonDefaultEditFormat &&
-                (typeof(DateTime) == modelExplorer.Metadata.UnderlyingOrModelType || typeof(DateTimeOffset) == modelExplorer.Metadata.UnderlyingOrModelType))
+                (typeof(DateTime) == modelExplorer.Metadata.UnderlyingOrModelType ||
+                 typeof(DateTimeOffset) == modelExplorer.Metadata.UnderlyingOrModelType))
             {
-                // Rfc3339 mode _may_ override EditFormatString in a limited number of cases e.g. EditFormatString
-                // must be a default format (i.e. came from a built-in [DataType] attribute).
-                format = rfc3339Format;
+                // Rfc3339 mode _may_ override EditFormatString in a limited number of cases. Happens only when
+                // EditFormatString has a default format i.e. came from a [DataType] attribute.
+                if (string.Equals("text", inputType) &&
+                    string.Equals(nameof(DateTimeOffset), inputTypeHint, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Auto-select a format that round-trips Offset and sub-Second values in a DateTimeOffset. Not
+                    // done if user chose the "text" type in .cshtml file or with data annotations i.e. when
+                    // inputTypeHint==null or "text".
+                    format = _rfc3339Formats["datetime"];
+                }
+                else if (_rfc3339Formats.TryGetValue(inputType, out var rfc3339Format))
+                {
+                    format = rfc3339Format;
+                }
+                else
+                {
+                    // Otherwise use default EditFormatString.
+                    format = modelExplorer.Metadata.EditFormatString;
+                }
             }
             else
             {
@@ -457,7 +498,7 @@ namespace Microsoft.AspNetCore.Mvc.TagHelpers
                 fieldType = modelExplorer.Metadata.UnderlyingOrModelType;
             }
 
-            foreach (string typeName in TemplateRenderer.GetTypeNames(modelExplorer.Metadata, fieldType))
+            foreach (var typeName in TemplateRenderer.GetTypeNames(modelExplorer.Metadata, fieldType))
             {
                 yield return typeName;
             }

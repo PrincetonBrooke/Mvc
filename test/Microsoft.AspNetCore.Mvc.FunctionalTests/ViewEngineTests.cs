@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -18,7 +19,7 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
 
         public ViewEngineTests(MvcTestFixture<RazorWebSite.Startup> fixture)
         {
-            Client = fixture.Client;
+            Client = fixture.CreateDefaultClient();
         }
 
         public HttpClient Client { get; }
@@ -66,9 +67,12 @@ ViewWithNestedLayout-Content
         public async Task RazorView_ExecutesPageAndLayout(string actionName, string expected)
         {
             // Arrange & Act
-            var body = await Client.GetStringAsync("http://localhost/ViewEngine/" + actionName);
+            var response = await Client.GetAsync("http://localhost/ViewEngine/" + actionName);
 
             // Assert
+            await response.AssertStatusCodeAsync(HttpStatusCode.OK);
+            var body = await response.Content.ReadAsStringAsync();
+
             Assert.Equal(expected, body.Trim(), ignoreLineEndingDifferences: true);
         }
 
@@ -240,48 +244,36 @@ ViewWithNestedLayout-Content
         public async Task RazorViewEngine_RendersPartialViews(string actionName, string expected)
         {
             // Arrange & Act
-            var body = await Client.GetStringAsync("http://localhost/PartialViewEngine/" + actionName);
+            var response = await Client.GetAsync("http://localhost/PartialViewEngine/" + actionName);
 
             // Assert
+            await response.AssertStatusCodeAsync(HttpStatusCode.OK);
+            var body = await response.Content.ReadAsStringAsync();
             Assert.Equal(expected, body.Trim(), ignoreLineEndingDifferences: true);
         }
 
-        [Fact]
-        public async Task RazorViewEngine_RendersViewsFromEmbeddedFileProvider()
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8754")]
+        public Task RazorViewEngine_RendersViewsFromEmbeddedFileProvider_WhenLookedupByName()
+            => RazorViewEngine_RendersIndexViewsFromEmbeddedFileProvider("/EmbeddedViews/LookupByName");
+
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8754")]
+        public Task RazorViewEngine_RendersViewsFromEmbeddedFileProvider_WhenLookedupByPath()
+            => RazorViewEngine_RendersIndexViewsFromEmbeddedFileProvider("/EmbeddedViews/LookupByPath");
+
+        private async Task RazorViewEngine_RendersIndexViewsFromEmbeddedFileProvider(string requestPath)
         {
             // Arrange
             var expected =
 @"<embdedded-layout>Hello from EmbeddedShared/_Partial
 Hello from Shared/_EmbeddedPartial
+<a href=""/EmbeddedViews"">Tag Helper Link</a>
 </embdedded-layout>";
 
             // Act
-            var body = await Client.GetStringAsync("/EmbeddedViews");
+            var body = await Client.GetStringAsync(requestPath);
 
             // Assert
             Assert.Equal(expected, body.Trim(), ignoreLineEndingDifferences: true);
-        }
-
-        [Fact]
-        public async Task RazorViewEngine_UpdatesViewsReferencedViaRelativePathsOnChange()
-        {
-            // Arrange
-            var expected1 = "Original content";
-            var expected2 = "New content";
-
-            // Act - 1
-            var body = await Client.GetStringAsync("/UpdateableFileProvider");
-
-            // Assert - 1
-            Assert.Equal(expected1, body.Trim(), ignoreLineEndingDifferences: true);
-
-            // Act - 2
-            var response = await Client.PostAsync("/UpdateableFileProvider/Update", new StringContent(string.Empty));
-            response.EnsureSuccessStatusCode();
-            body = await Client.GetStringAsync("/UpdateableFileProvider");
-
-            // Assert - 1
-            Assert.Equal(expected2, body.Trim(), ignoreLineEndingDifferences: true);
         }
 
         [Fact]
@@ -475,6 +467,48 @@ Partial that does not specify Layout
                 responseContent,
                 ignoreLineEndingDifferences: true);
 #endif
+        }
+
+        [Fact]
+        public async Task ViewEngine_NormalizesPathsReturnedByViewLocationExpanders()
+        {
+            // Arrange
+            var expected =
+@"Layout
+Page
+Partial";
+
+            // Act
+            var responseContent = await Client.GetStringAsync("/BackSlash");
+
+            // Assert
+            Assert.Equal(expected, responseContent, ignoreLineEndingDifferences: true);
+        }
+
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8754")]
+        public async Task ViewEngine_ResolvesPathsWithSlashesThatDoNotHaveExtensions()
+        {
+            // Arrange
+            var expected = @"<embdedded-layout>Hello from EmbeddedHome\EmbeddedPartial</embdedded-layout>";
+
+            // Act
+            var responseContent = await Client.GetStringAsync("/EmbeddedViews/RelativeNonPath");
+
+            // Assert
+            Assert.Equal(expected, responseContent.Trim());
+        }
+
+        [Fact]
+        public async Task ViewEngine_DiscoversViewsFromPagesSharedDirectory()
+        {
+            // Arrange
+            var expected = "Hello from Pages/Shared";
+
+            // Act
+            var responseContent = await Client.GetStringAsync("/ViewEngine/SearchInPages");
+
+            // Assert
+            Assert.Equal(expected, responseContent.Trim());
         }
     }
 }

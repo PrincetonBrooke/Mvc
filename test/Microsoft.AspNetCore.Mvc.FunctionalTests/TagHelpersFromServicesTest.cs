@@ -11,12 +11,12 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
     {
         public TagHelpersFromServicesTest(MvcTestFixture<ControllersFromServicesWebSite.Startup> fixture)
         {
-            Client = fixture.Client;
+            Client = fixture.CreateDefaultClient();
         }
 
         public HttpClient Client { get; }
 
-        [Fact(Skip = "Workaround for https://github.com/aspnet/Mvc/issues/5768.")]
+        [Fact]
         public async Task TagHelpersWithConstructorInjectionAreCreatedAndActivated()
         {
             // Arrange

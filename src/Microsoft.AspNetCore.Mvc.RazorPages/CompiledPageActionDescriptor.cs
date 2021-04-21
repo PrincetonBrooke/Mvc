@@ -30,15 +30,34 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages
         }
 
         /// <summary>
-        /// Gets or sets the <see cref="TypeInfo"/> of the page.
+        /// Gets the list of handler methods for the page. 
         /// </summary>
-        public TypeInfo PageTypeInfo { get; set; }
+        public IList<HandlerMethodDescriptor> HandlerMethods { get; set; }
 
         /// <summary>
-        /// Gets or sets the <see cref="TypeInfo"/> of the model.
+        /// Gets or sets the <see cref="TypeInfo"/> of the type that defines handler methods for the page. This can be
+        /// the same as <see cref="PageTypeInfo"/> and <see cref="ModelTypeInfo"/> if the page does not have an
+        /// explicit model type defined.
+        /// </summary>
+        public TypeInfo HandlerTypeInfo { get; set; }
+
+        /// <summary>
+        /// Gets or sets the declared model <see cref="TypeInfo"/> of the model for the page.
+        /// Typically this <see cref="TypeInfo"/> will be the type specified by the @model directive
+        /// in the razor page.
+        /// </summary>
+        public TypeInfo DeclaredModelTypeInfo { get; set; }
+
+        /// <summary>
+        /// Gets or sets the runtime model <see cref="TypeInfo"/> of the model for the razor page.
+        /// This is the <see cref="TypeInfo"/> that will be used at runtime to instantiate and populate
+        /// the model property of the page.
         /// </summary>
         public TypeInfo ModelTypeInfo { get; set; }
 
-        public IList<HandlerMethodDescriptor> HandlerMethods { get; } = new List<HandlerMethodDescriptor>();
+        /// <summary>
+        /// Gets or sets the <see cref="TypeInfo"/> of the page.
+        /// </summary>
+        public TypeInfo PageTypeInfo { get; set; }
     }
 }

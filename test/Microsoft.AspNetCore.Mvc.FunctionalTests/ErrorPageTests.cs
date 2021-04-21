@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc.Razor.Internal;
 using Xunit;
 
 namespace Microsoft.AspNetCore.Mvc.FunctionalTests
@@ -17,16 +16,16 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
     public class ErrorPageTests : IClassFixture<MvcTestFixture<ErrorPageMiddlewareWebSite.Startup>>
     {
         private static readonly string PreserveCompilationContextMessage = HtmlEncoder.Default.Encode(
-            "One or more compilation references are missing. Ensure that your project is referencing " +
-            "'Microsoft.NET.Sdk.Web' and the 'PreserveCompilationContext' property is not set to false.");
+            "One or more compilation references may be missing. " +
+            "If you're seeing this in a published application, set 'CopyRefAssembliesToPublishDirectory' to true in your project file to ensure files in the refs directory are published.");
         public ErrorPageTests(MvcTestFixture<ErrorPageMiddlewareWebSite.Startup> fixture)
         {
-            Client = fixture.Client;
+            Client = fixture.CreateDefaultClient();
         }
 
         public HttpClient Client { get; }
 
-        [Fact]
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8753")]
         public async Task CompilationFailuresAreListedByErrorPageMiddleware()
         {
             // Arrange
@@ -46,7 +45,7 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
             Assert.DoesNotContain(PreserveCompilationContextMessage, content);
         }
 
-        [Fact]
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8753")]
         public async Task ParseFailuresAreListedByErrorPageMiddleware()
         {
             // Arrange
@@ -68,13 +67,13 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
             Assert.Contains(expected, content);
         }
 
-        [Fact]
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8753")]
         public async Task CompilationFailuresFromViewImportsAreListed()
         {
             // Arrange
             var expectedMessage = "The type or namespace name &#x27;NamespaceDoesNotExist&#x27; could not be found ("
                 + "are you missing a using directive or an assembly reference?)";
-            var expectedCompilationContent = "public class _Views_ErrorFromViewImports_Index_cshtml : "
+            var expectedCompilationContent = "public class Views_ErrorFromViewImports_Index : "
                 + "global::Microsoft.AspNetCore.Mvc.Razor.RazorPage&lt;dynamic&gt;";
             var expectedMediaType = MediaTypeHeaderValue.Parse("text/html; charset=utf-8");
 
@@ -91,19 +90,9 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
             Assert.Contains(expectedCompilationContent, content);
         }
 
-        [Fact]
+        [Fact(Skip = "https://github.com/aspnet/Mvc/issues/8753")]
         public async Task RuntimeErrorAreListedByErrorPageMiddleware()
         {
-            // The desktop CLR does not correctly read the stack trace from portable PDBs. However generating full pdbs
-            // is only supported on machines with CLSID_CorSymWriter available. On desktop, we'll skip this test on 
-            // machines without this component.
-#if NET452
-            if (!SymbolsUtility.SupportsFullPdbGeneration())
-            {
-                return;
-            }
-#endif
-
             // Arrange
             var expectedMessage = HtmlEncoder.Default.Encode("throw new Exception(\"Error from view\");");
             var expectedMediaType = MediaTypeHeaderValue.Parse("text/html; charset=utf-8");
@@ -135,6 +124,24 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
             var content = await response.Content.ReadAsStringAsync();
             Assert.Contains("Loader Exceptions:", content);
             Assert.Contains(expectedMessage, content);
+        }
+
+        [Fact]
+        public async Task AggregateException_FlattensInnerExceptions()
+        {
+            // Arrange
+            var aggregateException = "AggregateException: One or more errors occurred.";
+            var nullReferenceException = "NullReferenceException: Foo cannot be null";
+            var indexOutOfRangeException = "IndexOutOfRangeException: Index is out of range";
+
+            // Act
+            var response = await Client.GetAsync("http://localhost/AggregateException");
+            var content = await response.Content.ReadAsStringAsync();
+
+            // Assert
+            Assert.Contains(aggregateException, content);
+            Assert.Contains(nullReferenceException, content);
+            Assert.Contains(indexOutOfRangeException, content);
         }
     }
 }

@@ -167,7 +167,7 @@ namespace Microsoft.AspNetCore.Mvc
             string expectedUrl)
         {
             // Arrange
-            var options = new TestOptionsManager<MvcOptions>();
+            var options = Options.Create(new MvcOptions());
             var uri = new Uri(url);
 
             var requestContext = new DefaultHttpContext();
@@ -196,7 +196,7 @@ namespace Microsoft.AspNetCore.Mvc
         [InlineData(null, false)]
         [InlineData(true, false)]
         [InlineData(false, true)]
-        public void OnAuthorization_RedirectsToHttpsEndpoint_WithSpecifiedStatusCodeAndrequireHttpsPermanentOption(bool? permanent, bool requireHttpsPermanent)
+        public void OnAuthorization_RedirectsToHttpsEndpoint_WithSpecifiedStatusCodeAndRequireHttpsPermanentOption(bool? permanent, bool requireHttpsPermanent)
         {
             var requestContext = new DefaultHttpContext();
             requestContext.RequestServices = CreateServices(null, requireHttpsPermanent);
@@ -234,7 +234,7 @@ namespace Microsoft.AspNetCore.Mvc
 
         private static IServiceProvider CreateServices(int? sslPort = null, bool requireHttpsPermanent = false)
         {
-            var options = new TestOptionsManager<MvcOptions>();
+            var options = Options.Create(new MvcOptions());
             options.Value.SslPort = sslPort;
             options.Value.RequireHttpsPermanent = requireHttpsPermanent;
 

@@ -3,7 +3,6 @@
 
 using System;
 using System.Reflection;
-using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
@@ -11,7 +10,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
     /// <summary>
     /// <see cref="IPageActivatorProvider"/> that uses type activation to create Razor Page instances.
     /// </summary>
-    public class DefaultPageModelActivatorProvider : IPageModelActivatorProvider
+    internal class DefaultPageModelActivatorProvider : IPageModelActivatorProvider
     {
         private readonly Action<PageContext, object> _disposer = Dispose;
 
@@ -33,7 +32,7 @@ namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
             }
 
             var factory = ActivatorUtilities.CreateFactory(modelTypeInfo, Type.EmptyTypes);
-            return (context) => factory(context.HttpContext.RequestServices, EmptyArray<object>.Instance);
+            return (context) => factory(context.HttpContext.RequestServices, Array.Empty<object>());
         }
 
         public virtual Action<PageContext, object> CreateReleaser(CompiledPageActionDescriptor actionDescriptor)

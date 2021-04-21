@@ -2,19 +2,19 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
-using Microsoft.AspNetCore.Mvc.DataAnnotations.Internal;
+using Microsoft.AspNetCore.Mvc.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Formatters;
-using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Binders;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
@@ -57,6 +57,8 @@ namespace Microsoft.AspNetCore.Mvc
                 binder => Assert.IsType<ServicesModelBinderProvider>(binder),
                 binder => Assert.IsType<BodyModelBinderProvider>(binder),
                 binder => Assert.IsType<HeaderModelBinderProvider>(binder),
+                binder => Assert.IsType<FloatingPointTypeModelBinderProvider>(binder),
+                binder => Assert.IsType<EnumTypeModelBinderProvider>(binder),
                 binder => Assert.IsType<SimpleTypeModelBinderProvider>(binder),
                 binder => Assert.IsType<CancellationTokenModelBinderProvider>(binder),
                 binder => Assert.IsType<ByteArrayModelBinderProvider>(binder),
@@ -106,8 +108,8 @@ namespace Microsoft.AspNetCore.Mvc
 
             // Assert
             Assert.Collection(options.InputFormatters,
-                formatter => Assert.IsType<JsonInputFormatter>(formatter),
-                formatter => Assert.IsType<JsonPatchInputFormatter>(formatter));
+                formatter => Assert.IsType<JsonPatchInputFormatter>(formatter),
+                formatter => Assert.IsType<JsonInputFormatter>(formatter));
         }
 
         [Fact]
@@ -181,6 +183,18 @@ namespace Microsoft.AspNetCore.Mvc
                 },
                 provider =>
                 {
+                    var formFileParameter = Assert.IsType<BindingSourceMetadataProvider>(provider);
+                    Assert.Equal(typeof(IFormFileCollection), formFileParameter.Type);
+                    Assert.Equal(BindingSource.FormFile, formFileParameter.BindingSource);
+                },
+                provider =>
+                {
+                    var formFileParameter = Assert.IsType<BindingSourceMetadataProvider>(provider);
+                    Assert.Equal(typeof(IEnumerable<IFormFile>), formFileParameter.Type);
+                    Assert.Equal(BindingSource.FormFile, formFileParameter.BindingSource);
+                },
+                provider =>
+                {
                     var excludeFilter = Assert.IsType<SuppressChildValidationMetadataProvider>(provider);
                     Assert.Equal(typeof(Type), excludeFilter.Type);
                 },
@@ -207,9 +221,19 @@ namespace Microsoft.AspNetCore.Mvc
                 provider =>
                 {
                     var excludeFilter = Assert.IsType<SuppressChildValidationMetadataProvider>(provider);
+                    Assert.Equal(typeof(IFormFileCollection), excludeFilter.Type);
+                },
+                provider =>
+                {
+                    var excludeFilter = Assert.IsType<SuppressChildValidationMetadataProvider>(provider);
                     Assert.Equal(typeof(Stream), excludeFilter.Type);
                 },
                 provider => Assert.IsType<DataAnnotationsMetadataProvider>(provider),
+                provider =>
+                {
+                    var excludeFilter = Assert.IsType<SuppressChildValidationMetadataProvider>(provider);
+                    Assert.Equal(typeof(IJsonPatchDocument), excludeFilter.Type);
+                },
                 provider =>
                 {
                     var excludeFilter = Assert.IsType<SuppressChildValidationMetadataProvider>(provider);
@@ -225,7 +249,8 @@ namespace Microsoft.AspNetCore.Mvc
                 {
                     var excludeFilter = Assert.IsType<SuppressChildValidationMetadataProvider>(provider);
                     Assert.Equal(typeof(XmlNode).FullName, excludeFilter.FullTypeName);
-                });
+                },
+                provider => Assert.IsType<HasValidatorsValidationMetadataProvider>(provider));
         }
 
         private static T GetOptions<T>(Action<IServiceCollection> action = null)
@@ -239,7 +264,9 @@ namespace Microsoft.AspNetCore.Mvc
         {
             var serviceCollection = new ServiceCollection();
             serviceCollection.AddSingleton(new ApplicationPartManager());
-            serviceCollection.AddSingleton<DiagnosticSource>(new DiagnosticListener("Microsoft.AspNetCore.Mvc"));
+            var diagnosticListener = new DiagnosticListener("Microsoft.AspNetCore.Mvc");
+            serviceCollection.AddSingleton<DiagnosticSource>(diagnosticListener);
+            serviceCollection.AddSingleton<DiagnosticListener>(diagnosticListener);
             serviceCollection.AddMvc();
             serviceCollection
                 .AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>()

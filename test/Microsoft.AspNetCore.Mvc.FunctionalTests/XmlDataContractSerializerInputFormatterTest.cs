@@ -28,7 +28,7 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
 
         public XmlDataContractSerializerInputFormatterTest(MvcTestFixture<Startup> fixture)
         {
-            Client = fixture.Client;
+            Client = fixture.CreateDefaultClient();
         }
 
         public HttpClient Client { get; }
@@ -46,11 +46,7 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
             // Assert
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             var data = await response.Content.ReadAsStringAsync();
-            Assert.Contains(
-                string.Format(
-                    ":There was an error deserializing the object of type {0}.",
-                    typeof(DummyClass).FullName),
-                data);
+            Assert.Contains("An error occurred while deserializing input data.", data);
         }
 
         [Fact]
@@ -82,7 +78,7 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
 
         // Verifies that the model state has errors related to body model validation.
         [Fact]
-        public async Task DataMissingForRefereneceTypeProperties_AndModelIsBound_AndHasMixedValidationErrors()
+        public async Task DataMissingForReferenceTypeProperties_AndModelIsBound_AndHasMixedValidationErrors()
         {
             // Arrange
             var input = "<Store xmlns=\"http://schemas.datacontract.org/2004/07/XmlFormattersWebSite\"" +

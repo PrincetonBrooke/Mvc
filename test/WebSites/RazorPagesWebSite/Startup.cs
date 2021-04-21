@@ -1,8 +1,12 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Globalization;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using RazorPagesWebSite.Conventions;
 
 namespace RazorPagesWebSite
 {
@@ -10,27 +14,39 @@ namespace RazorPagesWebSite
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services
-                .AddMvc()
-                .AddCookieTempDataProvider()
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options => options.LoginPath = "/Login");
+            services.AddMvc()
+                .AddMvcLocalization()
                 .AddRazorPagesOptions(options =>
                 {
-                    options.AuthorizePage("/HelloWorldWithAuth");
-                });
+                    options.Conventions.AuthorizePage("/HelloWorldWithAuth");
+                    options.Conventions.AuthorizeFolder("/Pages/Admin");
+                    options.Conventions.AllowAnonymousToPage("/Pages/Admin/Login");
+                    options.Conventions.AddPageRoute("/HelloWorldWithRoute", "Different-Route/{text}");
+                    options.Conventions.AddPageRoute("/Pages/NotTheRoot", string.Empty);
+                    options.Conventions.Add(new CustomModelTypeConvention());
+                })
+                .WithRazorPagesAtContentRoot()
+                .SetCompatibilityVersion(CompatibilityVersion.Latest);
         }
 
         public void Configure(IApplicationBuilder app)
         {
-            app.UseCultureReplacer();
-
-            app.UseCookieAuthentication(new CookieAuthenticationOptions
-            {
-                LoginPath = "/Login",
-                AutomaticAuthenticate = true,
-                AutomaticChallenge = true
-            });
+            app.UseAuthentication();
 
             app.UseStaticFiles();
+
+            var supportedCultures = new[]
+            {
+                new CultureInfo("en-US"),
+                new CultureInfo("fr-FR"),
+            };
+
+            app.UseRequestLocalization(new RequestLocalizationOptions
+            {
+                SupportedCultures = supportedCultures,
+                SupportedUICultures = supportedCultures
+            });
 
             app.UseMvc();
         }

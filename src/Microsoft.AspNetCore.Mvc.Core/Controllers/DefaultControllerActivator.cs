@@ -2,17 +2,15 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Reflection;
 using Microsoft.AspNetCore.Mvc.Core;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.AspNetCore.Mvc.Internal;
 
 namespace Microsoft.AspNetCore.Mvc.Controllers
 {
     /// <summary>
     /// <see cref="IControllerActivator"/> that uses type activation to create controllers.
     /// </summary>
-    public class DefaultControllerActivator : IControllerActivator
+    internal class DefaultControllerActivator : IControllerActivator
     {
         private readonly ITypeActivatorCache _typeActivatorCache;
 
@@ -31,7 +29,7 @@ namespace Microsoft.AspNetCore.Mvc.Controllers
         }
 
         /// <inheritdoc />
-        public virtual object Create(ControllerContext controllerContext)
+        public object Create(ControllerContext controllerContext)
         {
             if (controllerContext == null)
             {
@@ -59,7 +57,7 @@ namespace Microsoft.AspNetCore.Mvc.Controllers
         }
 
         /// <inheritdoc />
-        public virtual void Release(ControllerContext context, object controller)
+        public void Release(ControllerContext context, object controller)
         {
             if (context == null)
             {
@@ -71,8 +69,7 @@ namespace Microsoft.AspNetCore.Mvc.Controllers
                 throw new ArgumentNullException(nameof(controller));
             }
 
-            var disposable = controller as IDisposable;
-            if (disposable != null)
+            if (controller is IDisposable disposable)
             {
                 disposable.Dispose();
             }

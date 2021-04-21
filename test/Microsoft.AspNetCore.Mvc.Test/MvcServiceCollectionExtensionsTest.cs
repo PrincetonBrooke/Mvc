@@ -13,23 +13,21 @@ using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Cors.Internal;
-using Microsoft.AspNetCore.Mvc.DataAnnotations.Internal;
+using Microsoft.AspNetCore.Mvc.Cors;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Formatters.Json;
-using Microsoft.AspNetCore.Mvc.Formatters.Json.Internal;
-using Microsoft.AspNetCore.Mvc.Internal;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Razor.Compilation;
-using Microsoft.AspNetCore.Mvc.Razor.Internal;
 using Microsoft.AspNetCore.Mvc.Razor.TagHelpers;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure;
-using Microsoft.AspNetCore.Mvc.RazorPages.Internal;
 using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.AspNetCore.Mvc.ViewFeatures.Internal;
+using Microsoft.AspNetCore.Mvc.ViewFeatures.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.ObjectPool;
@@ -55,8 +53,8 @@ namespace Microsoft.AspNetCore.Mvc
             var services = new ServiceCollection();
             services.AddSingleton<IHostingEnvironment>(GetHostingEnvironment());
 
-            // Register a mock implementation of each service, AddMvcServices should add another implemenetation.
-            foreach (var serviceType in MutliRegistrationServiceTypes)
+            // Register a mock implementation of each service, AddMvcServices should add another implementation.
+            foreach (var serviceType in MultiRegistrationServiceTypes)
             {
                 var mockType = typeof(Mock<>).MakeGenericType(serviceType.Key);
                 services.Add(ServiceDescriptor.Transient(serviceType.Key, mockType));
@@ -66,7 +64,7 @@ namespace Microsoft.AspNetCore.Mvc
             services.AddMvc();
 
             // Assert
-            foreach (var serviceType in MutliRegistrationServiceTypes)
+            foreach (var serviceType in MultiRegistrationServiceTypes)
             {
                 AssertServiceCountEquals(services, serviceType.Key, serviceType.Value.Length + 1);
 
@@ -161,7 +159,7 @@ namespace Microsoft.AspNetCore.Mvc
         }
 
         [Fact]
-        public void AddMvcTwice_DoesNotAddDuplicateFramewokrParts()
+        public void AddMvcTwice_DoesNotAddDuplicateFrameworkParts()
         {
             // Arrange
             var mvcRazorAssembly = typeof(UrlResolutionTagHelper).GetTypeInfo().Assembly;
@@ -213,8 +211,10 @@ namespace Microsoft.AspNetCore.Mvc
                 feature => Assert.IsType<ControllerFeatureProvider>(feature),
                 feature => Assert.IsType<ViewComponentFeatureProvider>(feature),
                 feature => Assert.IsType<TagHelperFeatureProvider>(feature),
-                feature => Assert.IsType<MetadataReferenceFeatureProvider>(feature),
+                feature => Assert.IsType<RazorCompiledItemFeatureProvider>(feature),
+#pragma warning disable CS0618 // Type or member is obsolete
                 feature => Assert.IsType<ViewsFeatureProvider>(feature));
+#pragma warning restore CS0618 // Type or member is obsolete
         }
 
         [Fact]
@@ -258,7 +258,11 @@ namespace Microsoft.AspNetCore.Mvc
 
             services.AddSingleton<IHostingEnvironment>(GetHostingEnvironment());
             services.AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>();
-            services.AddSingleton<DiagnosticSource>(new DiagnosticListener("Microsoft.AspNet"));
+
+            var diagnosticListener = new DiagnosticListener("Microsoft.AspNet");
+            services.AddSingleton<DiagnosticSource>(diagnosticListener);
+            services.AddSingleton<DiagnosticListener>(diagnosticListener);
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
             services.AddLogging();
             services.AddOptions();
             services.AddMvc();
@@ -315,7 +319,7 @@ namespace Microsoft.AspNetCore.Mvc
                 services.AddSingleton<IHostingEnvironment>(GetHostingEnvironment());
                 services.AddMvc();
 
-                var multiRegistrationServiceTypes = MutliRegistrationServiceTypes;
+                var multiRegistrationServiceTypes = MultiRegistrationServiceTypes;
                 return services
                     .Where(sd => !multiRegistrationServiceTypes.Keys.Contains(sd.ServiceType))
                     .Where(sd => sd.ServiceType.GetTypeInfo().Assembly.FullName.Contains("Mvc"))
@@ -323,7 +327,7 @@ namespace Microsoft.AspNetCore.Mvc
             }
         }
 
-        private Dictionary<Type, Type[]> MutliRegistrationServiceTypes
+        private Dictionary<Type, Type[]> MultiRegistrationServiceTypes
         {
             get
             {
@@ -344,6 +348,14 @@ namespace Microsoft.AspNetCore.Mvc
                         new Type[]
                         {
                             typeof(MvcCoreRouteOptionsSetup),
+                            typeof(MvcCoreRouteOptionsSetup),
+                        }
+                    },
+                    {
+                        typeof(IConfigureOptions<ApiBehaviorOptions>),
+                        new Type[]
+                        {
+                            typeof(ApiBehaviorOptionsSetup),
                         }
                     },
                     {
@@ -358,10 +370,30 @@ namespace Microsoft.AspNetCore.Mvc
                         typeof(IConfigureOptions<RazorViewEngineOptions>),
                         new[]
                         {
-#pragma warning disable 0618
                             typeof(RazorViewEngineOptionsSetup),
-#pragma warning restore 0618
-                            typeof(DependencyContextRazorViewEngineOptionsSetup)
+                            typeof(RazorPagesRazorViewEngineOptionsSetup),
+                        }
+                    },
+                    {
+                        typeof(IPostConfigureOptions<MvcOptions>),
+                        new[]
+                        {
+                            typeof(MvcOptionsConfigureCompatibilityOptions),
+                            typeof(MvcCoreMvcOptionsSetup),
+                        }
+                    },
+                    {
+                        typeof(IPostConfigureOptions<RazorPagesOptions>),
+                        new[]
+                        {
+                            typeof(RazorPagesOptionsConfigureCompatibilityOptions),
+                        }
+                    },
+                    {
+                        typeof(IPostConfigureOptions<MvcJsonOptions>),
+                        new[]
+                        {
+                            typeof(MvcJsonOptionsConfigureCompatibilityOptions),
                         }
                     },
                     {
@@ -409,6 +441,9 @@ namespace Microsoft.AspNetCore.Mvc
                             typeof(DefaultApplicationModelProvider),
                             typeof(CorsApplicationModelProvider),
                             typeof(AuthorizationApplicationModelProvider),
+                            typeof(TempDataApplicationModelProvider),
+                            typeof(ViewDataAttributeApplicationModelProvider),
+                            typeof(ApiBehaviorApplicationModelProvider),
                         }
                     },
                     {
@@ -417,6 +452,25 @@ namespace Microsoft.AspNetCore.Mvc
                         {
                             typeof(DefaultApiDescriptionProvider),
                             typeof(JsonPatchOperationsArrayProvider),
+                        }
+                    },
+                    {
+                        typeof(IPageRouteModelProvider),
+                        new[]
+                        {
+                            typeof(CompiledPageRouteModelProvider),
+                        }
+                    },
+                    {
+                        typeof(IPageApplicationModelProvider),
+                        new[]
+                        {
+                            typeof(AuthorizationPageApplicationModelProvider),
+                            typeof(AuthorizationPageApplicationModelProvider),
+                            typeof(DefaultPageApplicationModelProvider),
+                            typeof(TempDataFilterPageApplicationModelProvider),
+                            typeof(ViewDataAttributePageApplicationModelProvider),
+                            typeof(ResponseCacheFilterApplicationModelProvider),
                         }
                     },
                 };

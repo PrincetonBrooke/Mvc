@@ -5,10 +5,13 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
+using BasicWebSite.Models;
 using Microsoft.AspNetCore.Mvc.Formatters.Xml;
 using Microsoft.AspNetCore.Testing.xunit;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace Microsoft.AspNetCore.Mvc.FunctionalTests
@@ -17,7 +20,7 @@ namespace Microsoft.AspNetCore.Mvc.FunctionalTests
     {
         public ContentNegotiationTest(MvcTestFixture<BasicWebSite.Startup> fixture)
         {
-            Client = fixture.Client;
+            Client = fixture.CreateDefaultClient();
         }
 
         public HttpClient Client { get; }
@@ -270,7 +273,7 @@ END:VCARD
         [Fact]
         public async Task ProducesAttribute_OnDerivedAction_OverridesTheValueOnBaseAction()
         {
-            // Arange
+            // Arrange
             var expectedContentType = MediaTypeHeaderValue.Parse(
                 "application/custom_NoProducesContentOnClassController_Action;charset=utf-8");
             var expectedBody = "NoProducesContentOnClassController";
@@ -447,13 +450,12 @@ END:VCARD
         [Fact]
         public async Task ProducesAttribute_And_FormatFilterAttribute_Conflicting()
         {
-            // Arrange
-            var expectedContentType = MediaTypeHeaderValue.Parse("application/json");
-
-            // Act
-            var response = await Client.GetAsync("http://localhost/FormatFilter/MethodWithFormatFilter.json");
+            // Arrange & Act
+            var response = await Client.GetAsync(
+                "http://localhost/FormatFilter/ProducesTakesPrecedenceOverUserSuppliedFormatMethod?format=json");
 
             // Assert
+            // Explicit content type set by the developer takes precedence over the format requested by the end user
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
 
@@ -461,12 +463,69 @@ END:VCARD
         public async Task ProducesAttribute_And_FormatFilterAttribute_Collaborating()
         {
             // Arrange & Act
-            var response = await Client.GetAsync("http://localhost/FormatFilter/MethodWithFormatFilter");
+            var response = await Client.GetAsync(
+                "http://localhost/FormatFilter/ProducesTakesPrecedenceOverUserSuppliedFormatMethod");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var body = await response.Content.ReadAsStringAsync();
-            Assert.Equal(body, "MethodWithFormatFilter");
+            Assert.Equal("MethodWithFormatFilter", body);
+        }
+
+        [Fact]
+        public async Task ProducesAttribute_CustomMediaTypeWithJsonSuffix_RunsConnegAndSelectsJsonFormatter()
+        {
+            // Arrange
+            var expectedMediaType = MediaTypeHeaderValue.Parse("application/vnd.example.contact+json; v=2; charset=utf-8");
+            var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/ProducesWithMediaTypeSuffixesController/ContactInfo");
+            request.Headers.Add("Accept", "application/vnd.example.contact+json; v=2");
+
+            // Act
+            var response = await Client.SendAsync(request);
+
+            // Assert
+            Assert.Equal(expectedMediaType, response.Content.Headers.ContentType);
+            var body = await response.Content.ReadAsStringAsync();
+            var contact = JsonConvert.DeserializeObject<Contact>(body);
+            Assert.Equal("Jason Ecsemelle", contact.Name);
+        }
+
+        [Fact]
+        public async Task ProducesAttribute_CustomMediaTypeWithXmlSuffix_RunsConnegAndSelectsXmlFormatter()
+        {
+            // Arrange
+            var expectedMediaType = MediaTypeHeaderValue.Parse("application/vnd.example.contact+xml; v=2; charset=utf-8");
+            var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/ProducesWithMediaTypeSuffixesController/ContactInfo");
+            request.Headers.Add("Accept", "application/vnd.example.contact+xml; v=2");
+
+            // Act
+            var response = await Client.SendAsync(request);
+
+            // Assert
+            Assert.Equal(expectedMediaType, response.Content.Headers.ContentType);
+            var bodyStream = await response.Content.ReadAsStreamAsync();
+            var xmlDeserializer = new DataContractSerializer(typeof(Contact));
+            var contact = xmlDeserializer.ReadObject(bodyStream) as Contact;
+            Assert.Equal("Jason Ecsemelle", contact.Name);
+        }
+
+        [Fact]
+        public async Task FormatFilter_XmlAsFormat_ReturnsXml()
+        {
+            // Arrange
+            var expectedBody = "<FormatFilterController.Customer xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\""
+                + " xmlns=\"http://schemas.datacontract.org/2004/07/BasicWebSite.Controllers.ContentNegotiation\">"
+                + "<Name>John</Name></FormatFilterController.Customer>";
+
+            // Act
+            var response = await Client.GetAsync(
+                "http://localhost/FormatFilter/CustomerInfo?format=xml");
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("application/xml; charset=utf-8", response.Content.Headers.ContentType.ToString());
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.Equal(expectedBody, body);
         }
     }
 }

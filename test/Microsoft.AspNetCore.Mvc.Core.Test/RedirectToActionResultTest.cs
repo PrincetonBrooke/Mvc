@@ -5,7 +5,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.Internal;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Testing;
@@ -111,6 +111,34 @@ namespace Microsoft.AspNetCore.Mvc
             Assert.Equal(expectedUrl, httpContext.Response.Headers["Location"]);
         }
 
+        [Fact]
+        public async Task RedirectToAction_Execute_WithFragment_PassesCorrectValuesToRedirect_WithPreserveMethod()
+        {
+            // Arrange
+            var expectedUrl = "/Home/SampleAction#test";
+            var expectedStatusCode = StatusCodes.Status307TemporaryRedirect;
+
+            var httpContext = new DefaultHttpContext
+            {
+                RequestServices = CreateServices().BuildServiceProvider(),
+            };
+
+            var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+
+            var urlHelper = GetMockUrlHelper(expectedUrl);
+            var result = new RedirectToActionResult("SampleAction", "Home", null, false, true, "test")
+            {
+                UrlHelper = urlHelper,
+            };
+
+            // Act
+            await result.ExecuteResultAsync(actionContext);
+
+            // Assert
+            Assert.Equal(expectedStatusCode, httpContext.Response.StatusCode);
+            Assert.Equal(expectedUrl, httpContext.Response.Headers["Location"]);
+        }
+
         private static IUrlHelper GetMockUrlHelper(string returnValue)
         {
             var urlHelper = new Mock<IUrlHelper>();
@@ -122,7 +150,7 @@ namespace Microsoft.AspNetCore.Mvc
         private static IServiceCollection CreateServices()
         {
             var services = new ServiceCollection();
-            services.AddSingleton<RedirectToActionResultExecutor>();
+            services.AddSingleton<IActionResultExecutor<RedirectToActionResult>, RedirectToActionResultExecutor>();
             services.AddSingleton<IUrlHelperFactory, UrlHelperFactory>();
             services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
             return services;

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -10,7 +9,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Internal;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Mvc.ModelBinding.Internal;
 using Microsoft.Extensions.Primitives;
 using Xunit;
 
@@ -234,7 +232,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Model
             Assert.NotNull(model.Address);
-            Assert.Equal(1, model.Address.Count);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -275,7 +273,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             // Model
             Assert.NotNull(model.Address);
             Assert.Same(collection, model.Address);
-            Assert.Equal(1, model.Address.Count);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -336,7 +334,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Model (collection is cleared and new members created from scratch).
             Assert.NotNull(model.Address);
-            Assert.Equal(1, model.Address.Count);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -373,15 +371,15 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             var result = await TryUpdateModelAsync(model, string.Empty, testContext);
 
             // Assert
-            Assert.False(result);
+            Assert.True(result);
 
             // ModelState
-            Assert.False(modelState.IsValid);
+            Assert.True(modelState.IsValid);
             var entry = Assert.Single(modelState);
             Assert.Equal("Address[0].Street", entry.Key);
             var state = entry.Value;
             Assert.NotNull(state);
-            Assert.Equal(ModelValidationState.Unvalidated, state.ValidationState);
+            Assert.Equal(ModelValidationState.Valid, state.ValidationState);
             Assert.Equal("SomeStreet", state.RawValue);
             Assert.Equal("SomeStreet", state.AttemptedValue);
         }
@@ -402,15 +400,15 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             var result = await TryUpdateModelAsync(model, "prefix", testContext);
 
             // Assert
-            Assert.False(result);
+            Assert.True(result);
 
             // ModelState
-            Assert.False(modelState.IsValid);
+            Assert.True(modelState.IsValid);
             var entry = Assert.Single(modelState);
             Assert.Equal("prefix.Address[0].Street", entry.Key);
             var state = entry.Value;
             Assert.NotNull(state);
-            Assert.Equal(ModelValidationState.Unvalidated, state.ValidationState);
+            Assert.Equal(ModelValidationState.Valid, state.ValidationState);
             Assert.Equal("SomeStreet", state.RawValue);
             Assert.Equal("SomeStreet", state.AttemptedValue);
         }
@@ -440,7 +438,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Model
             Assert.NotNull(model.Address);
-            Assert.Equal(1, model.Address.Length);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -488,7 +486,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             // Model
             Assert.NotNull(model.Address);
             Assert.NotSame(collection, model.Address);
-            Assert.Equal(1, model.Address.Length);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -531,7 +529,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.NotNull(model.Address);
 
             // Arrays should not be updated.
-            Assert.Equal(0, model.Address.Length);
+            Assert.Empty(model.Address);
 
             // ModelState
             Assert.True(modelState.IsValid);
@@ -572,7 +570,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.NotNull(model.Address);
 
             // Arrays should not be updated.
-            Assert.Equal(1, model.Address.Count());
+            Assert.Single(model.Address);
             Assert.Collection(
                 model.Address,
                 (a) =>
@@ -619,7 +617,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.NotNull(model.Address);
 
             // Arrays should not be updated.
-            Assert.Equal(1, model.Address.Count());
+            Assert.Single(model.Address);
             Assert.Collection(
                 model.Address,
                 (a) =>
@@ -829,7 +827,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Model
             Assert.NotNull(model.Address);
-            Assert.Equal(1, model.Address.Count);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -870,7 +868,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             // Model
             Assert.NotNull(model.Address);
             Assert.Same(collection, model.Address);
-            Assert.Equal(1, model.Address.Count);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -921,7 +919,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Model (collection is cleared and new members created from scratch).
             Assert.NotNull(model.Address);
-            Assert.Equal(1, model.Address.Count);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -957,7 +955,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
 
             // Model
             Assert.NotNull(model.Address);
-            Assert.Equal(1, model.Address.Length);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -1005,7 +1003,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             // Model
             Assert.NotNull(model.Address);
             Assert.NotSame(collection, model.Address);
-            Assert.Equal(1, model.Address.Length);
+            Assert.Single(model.Address);
             Assert.Equal("SomeStreet", model.Address[0].Street);
             Assert.Null(model.Address[0].City);
 
@@ -1043,7 +1041,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             Assert.NotNull(model.Address);
 
             // Arrays should not be updated.
-            Assert.Equal(0, model.Address.Length);
+            Assert.Empty(model.Address);
 
             // ModelState
             Assert.True(modelState.IsValid);

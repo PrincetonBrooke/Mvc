@@ -4,12 +4,6 @@
 using System;
 using System.Buffers;
 using Microsoft.AspNetCore.Mvc.DataAnnotations;
-using Microsoft.AspNetCore.Mvc.DataAnnotations.Internal;
-using Microsoft.AspNetCore.Mvc.Formatters;
-using Microsoft.AspNetCore.Mvc.Formatters.Json.Internal;
-using Microsoft.AspNetCore.Mvc.Internal;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -28,7 +22,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             optionsSetup.Configure(Value);
 
             var validationAttributeAdapterProvider = new ValidationAttributeAdapterProvider();
-            var dataAnnotationLocalizationOptions = new TestOptionsManager<MvcDataAnnotationsLocalizationOptions>();
+            var dataAnnotationLocalizationOptions = Options.Create(new MvcDataAnnotationsLocalizationOptions());
             var stringLocalizer = new Mock<IStringLocalizer>();
             var stringLocalizerFactory = new Mock<IStringLocalizerFactory>();
             stringLocalizerFactory
@@ -42,7 +36,7 @@ namespace Microsoft.AspNetCore.Mvc.IntegrationTests
             dataAnnotationOptionsSetup.Configure(Value);
 
             var loggerFactory = new LoggerFactory();
-            var jsonOptions = new TestOptionsManager<MvcJsonOptions>();
+            var jsonOptions = Options.Create(new MvcJsonOptions());
             var charPool = ArrayPool<char>.Shared;
             var objectPoolProvider = new DefaultObjectPoolProvider();
 

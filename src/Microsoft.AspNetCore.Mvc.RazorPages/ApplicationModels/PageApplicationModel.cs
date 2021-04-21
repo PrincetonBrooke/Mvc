@@ -4,7 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Internal;
 
 namespace Microsoft.AspNetCore.Mvc.ApplicationModels
 {
@@ -16,26 +19,34 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
         /// <summary>
         /// Initializes a new instance of <see cref="PageApplicationModel"/>.
         /// </summary>
-        /// <param name="relativePath">The application relative path of the page.</param>
-        /// <param name="viewEnginePath">The path relative to the base path for page discovery.</param>
-        public PageApplicationModel(string relativePath, string viewEnginePath)
+        public PageApplicationModel(
+            PageActionDescriptor actionDescriptor,
+            TypeInfo handlerType,
+            IReadOnlyList<object> handlerAttributes)
+            : this(actionDescriptor, handlerType, handlerType, handlerAttributes)
         {
-            if (relativePath == null)
-            {
-                throw new ArgumentNullException(nameof(relativePath));
-            }
+        }
 
-            if (viewEnginePath == null)
-            {
-                throw new ArgumentNullException(nameof(viewEnginePath));
-            }
-
-            RelativePath = relativePath;
-            ViewEnginePath = viewEnginePath;
+        /// <summary>
+        /// Initializes a new instance of <see cref="PageApplicationModel"/>.
+        /// </summary>
+        public PageApplicationModel(
+            PageActionDescriptor actionDescriptor,
+            TypeInfo declaredModelType,
+            TypeInfo handlerType,
+            IReadOnlyList<object> handlerAttributes)
+        {
+            ActionDescriptor = actionDescriptor ?? throw new ArgumentNullException(nameof(actionDescriptor));
+            DeclaredModelType = declaredModelType;
+            HandlerType = handlerType;
 
             Filters = new List<IFilterMetadata>();
-            Properties = new Dictionary<object, object>();
-            Selectors = new List<SelectorModel>();
+            Properties = new CopyOnWriteDictionary<object, object>(
+                actionDescriptor.Properties,
+                EqualityComparer<object>.Default);
+            HandlerMethods = new List<PageHandlerModel>();
+            HandlerProperties = new List<PagePropertyModel>();
+            HandlerTypeAttributes = handlerAttributes;
         }
 
         /// <summary>
@@ -49,27 +60,54 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
                 throw new ArgumentNullException(nameof(other));
             }
 
-            RelativePath = other.RelativePath;
-            ViewEnginePath = other.ViewEnginePath;
+            ActionDescriptor = other.ActionDescriptor;
+            HandlerType = other.HandlerType;
+            PageType = other.PageType;
+            ModelType = other.ModelType;
 
             Filters = new List<IFilterMetadata>(other.Filters);
             Properties = new Dictionary<object, object>(other.Properties);
 
-            Selectors = new List<SelectorModel>(other.Selectors.Select(m => new SelectorModel(m)));
+            HandlerMethods = new List<PageHandlerModel>(other.HandlerMethods.Select(m => new PageHandlerModel(m)));
+            HandlerProperties = new List<PagePropertyModel>(other.HandlerProperties.Select(p => new PagePropertyModel(p)));
+            HandlerTypeAttributes = other.HandlerTypeAttributes;
         }
 
         /// <summary>
-        /// Gets or sets the application root relative path for the page.
+        /// Gets the <see cref="PageActionDescriptor"/>.
         /// </summary>
-        public string RelativePath { get; }
+        public PageActionDescriptor ActionDescriptor { get; }
 
         /// <summary>
-        /// Gets or sets the path relative to the base path for page discovery.
+        /// Gets the application root relative path for the page.
         /// </summary>
-        public string ViewEnginePath { get; }
+        public string RelativePath => ActionDescriptor.RelativePath;
 
         /// <summary>
-        /// Gets or sets the applicable <see cref="IFilterMetadata"/> instances.
+        /// Gets the path relative to the base path for page discovery.
+        /// <para>
+        /// This value is the path of the file without extension, relative to the pages root directory.
+        /// e.g. the <see cref="ViewEnginePath"/> for the file /Pages/Catalog/Antiques.cshtml is <c>/Catalog/Antiques</c>
+        /// </para>
+        /// <para>
+        /// In an area, this value is the path of the file without extension, relative to the pages root directory for the specified area.
+        /// e.g. the <see cref="ViewEnginePath"/>  for the file Areas/Identity/Pages/Manage/Accounts.cshtml, is <c>/Manage/Accounts</c>.
+        /// </para>
+        /// </summary>
+        public string ViewEnginePath => ActionDescriptor.ViewEnginePath;
+
+        /// <summary>
+        /// Gets the area name.
+        /// </summary>
+        public string AreaName => ActionDescriptor.AreaName;
+
+        /// <summary>
+        /// Gets the route template for the page.
+        /// </summary>
+        public string RouteTemplate => ActionDescriptor.AttributeRouteInfo?.Template;
+
+        /// <summary>
+        /// Gets the applicable <see cref="IFilterMetadata"/> instances.
         /// </summary>
         public IList<IFilterMetadata> Filters { get; }
 
@@ -79,8 +117,42 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
         public IDictionary<object, object> Properties { get; }
 
         /// <summary>
-        /// Gets or sets the <see cref="SelectorModel"/> instances.
+        /// Gets or sets the <see cref="TypeInfo"/> of the Razor page.
         /// </summary>
-        public IList<SelectorModel> Selectors { get; }
+        public TypeInfo PageType { get; set; }
+
+        /// <summary>
+        /// Gets the declared model <see cref="TypeInfo"/> of the model for the page.
+        /// Typically this <see cref="TypeInfo"/> will be the type specified by the @model directive
+        /// in the razor page.
+        /// </summary>
+        public TypeInfo DeclaredModelType { get; }
+
+        /// <summary>
+        /// Gets or sets the runtime model <see cref="TypeInfo"/> of the model for the razor page.
+        /// This is the <see cref="TypeInfo"/> that will be used at runtime to instantiate and populate
+        /// the model property of the page.
+        /// </summary>
+        public TypeInfo ModelType { get; set; }
+
+        /// <summary>
+        /// Gets the <see cref="TypeInfo"/> of the handler.
+        /// </summary>
+        public TypeInfo HandlerType { get; }
+
+        /// <summary>
+        /// Gets the sequence of attributes declared on <see cref="HandlerType"/>.
+        /// </summary>
+        public IReadOnlyList<object> HandlerTypeAttributes { get; }
+
+        /// <summary>
+        /// Gets the sequence of <see cref="PageHandlerModel"/> instances.
+        /// </summary>
+        public IList<PageHandlerModel> HandlerMethods { get; }
+
+        /// <summary>
+        /// Gets the sequence of <see cref="PagePropertyModel"/> instances on <see cref="PageHandlerModel"/>.
+        /// </summary>
+        public IList<PagePropertyModel> HandlerProperties { get; }
     }
 }

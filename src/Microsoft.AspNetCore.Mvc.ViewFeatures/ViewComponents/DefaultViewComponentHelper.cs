@@ -4,13 +4,12 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Microsoft.AspNetCore.Mvc.ViewFeatures.Internal;
+using Microsoft.AspNetCore.Mvc.ViewFeatures.Buffers;
 using Microsoft.Extensions.Internal;
 
 namespace Microsoft.AspNetCore.Mvc.ViewComponents
@@ -42,7 +41,8 @@ namespace Microsoft.AspNetCore.Mvc.ViewComponents
             HtmlEncoder htmlEncoder,
             IViewComponentSelector selector,
             IViewComponentInvokerFactory invokerFactory,
-            IViewBufferScope viewBufferScope)
+            IViewBufferScope viewBufferScope
+            )
         {
             if (descriptorProvider == null)
             {
@@ -98,7 +98,11 @@ namespace Microsoft.AspNetCore.Mvc.ViewComponents
             var descriptor = _selector.SelectComponent(name);
             if (descriptor == null)
             {
-                throw new InvalidOperationException(Resources.FormatViewComponent_CannotFindComponent(name));
+                throw new InvalidOperationException(Resources.FormatViewComponent_CannotFindComponent(
+                    name,
+                    nameof(ViewComponentAttribute),
+                    ViewComponentConventions.ViewComponentSuffix,
+                    nameof(NonViewComponentAttribute)));
             }
 
             return InvokeCoreAsync(descriptor, arguments);
@@ -129,7 +133,10 @@ namespace Microsoft.AspNetCore.Mvc.ViewComponents
             }
 
             throw new InvalidOperationException(Resources.FormatViewComponent_CannotFindComponent(
-                componentType.FullName));
+                componentType.FullName,
+                nameof(ViewComponentAttribute),
+                ViewComponentConventions.ViewComponentSuffix,
+                nameof(NonViewComponentAttribute)));
         }
 
         // Internal for testing

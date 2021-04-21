@@ -3,135 +3,141 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.AspNetCore.Razor.Evolution;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 
 namespace Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure
 {
     public class PageActionDescriptorProvider : IActionDescriptorProvider
     {
-        private static readonly string IndexFileName = "Index.cshtml";
-        private readonly RazorProject _project;
+        private readonly IPageRouteModelProvider[] _routeModelProviders;
         private readonly MvcOptions _mvcOptions;
-        private readonly RazorPagesOptions _pagesOptions;
+        private readonly IPageRouteModelConvention[] _conventions;
 
         public PageActionDescriptorProvider(
-            RazorProject project,
+            IEnumerable<IPageRouteModelProvider> pageRouteModelProviders,
             IOptions<MvcOptions> mvcOptionsAccessor,
             IOptions<RazorPagesOptions> pagesOptionsAccessor)
         {
-            _project = project;
+            _routeModelProviders = pageRouteModelProviders.OrderBy(p => p.Order).ToArray();
             _mvcOptions = mvcOptionsAccessor.Value;
-            _pagesOptions = pagesOptionsAccessor.Value;
+
+            _conventions = pagesOptionsAccessor.Value.Conventions
+                .OfType<IPageRouteModelConvention>()
+                .ToArray();
         }
 
-        public int Order { get; set; }
+        public int Order { get; set; } = -900; // Run after the default MVC provider, but before others.
 
         public void OnProvidersExecuting(ActionDescriptorProviderContext context)
         {
-            foreach (var item in _project.EnumerateItems(_pagesOptions.RootDirectory))
+            var pageRouteModels = BuildModel();
+
+            for (var i = 0; i < pageRouteModels.Count; i++)
             {
-                if (item.FileName.StartsWith("_"))
-                {
-                    // Pages like _PageImports should not be routable.
-                    continue;
-                }
-
-                string template;
-                if (!PageDirectiveFeature.TryGetPageDirective(item, out template))
-                {
-                    // .cshtml pages without @page are not RazorPages.
-                    continue;
-                }
-
-                if (AttributeRouteModel.IsOverridePattern(template))
-                {
-                    throw new InvalidOperationException(string.Format(
-                        Resources.PageActionDescriptorProvider_RouteTemplateCannotBeOverrideable,
-                        item.Path));
-                }
-
-                AddActionDescriptors(context.Results, item, template);
+                AddActionDescriptors(context.Results, pageRouteModels[i]);
             }
+        }
+
+        protected IList<PageRouteModel> BuildModel()
+        {
+            var context = new PageRouteModelProviderContext();
+
+            for (var i = 0; i < _routeModelProviders.Length; i++)
+            {
+                _routeModelProviders[i].OnProvidersExecuting(context);
+            }
+
+            for (var i = _routeModelProviders.Length - 1; i >= 0; i--)
+            {
+                _routeModelProviders[i].OnProvidersExecuted(context);
+            }
+
+            return context.RouteModels;
         }
 
         public void OnProvidersExecuted(ActionDescriptorProviderContext context)
         {
         }
 
-        private void AddActionDescriptors(IList<ActionDescriptor> actions, RazorProjectItem item, string template)
+        private void AddActionDescriptors(IList<ActionDescriptor> actions, PageRouteModel model)
         {
-            var model = new PageApplicationModel(item.CombinedPath, item.PathWithoutExtension);
-            var routePrefix = item.PathWithoutExtension;
-            model.Selectors.Add(CreateSelectorModel(routePrefix, template));
-
-            if (string.Equals(IndexFileName, item.FileName, StringComparison.OrdinalIgnoreCase))
+            for (var i = 0; i < _conventions.Length; i++)
             {
-                var parentDirectoryPath = item.Path;
-                var index = parentDirectoryPath.LastIndexOf('/');
-                if (index == -1)
-                {
-                    parentDirectoryPath = string.Empty; 
-                }
-                else
-                {
-                    parentDirectoryPath = parentDirectoryPath.Substring(0, index);
-                }
-                model.Selectors.Add(CreateSelectorModel(parentDirectoryPath, template));
-            }
-
-            for (var i = 0; i < _pagesOptions.Conventions.Count; i++)
-            {
-                _pagesOptions.Conventions[i].Apply(model);
-            }
-
-            var filters = new List<FilterDescriptor>(_mvcOptions.Filters.Count + model.Filters.Count);
-            for (var i = 0; i < _mvcOptions.Filters.Count; i++)
-            {
-                filters.Add(new FilterDescriptor(_mvcOptions.Filters[i], FilterScope.Global));
-            }
-
-            for (var i = 0; i < model.Filters.Count; i++)
-            {
-                filters.Add(new FilterDescriptor(model.Filters[i], FilterScope.Action));
+                _conventions[i].Apply(model);
             }
 
             foreach (var selector in model.Selectors)
             {
-                actions.Add(new PageActionDescriptor()
+                var descriptor = new PageActionDescriptor
                 {
-                    AttributeRouteInfo = new AttributeRouteInfo()
+                    ActionConstraints = selector.ActionConstraints.ToList(),
+                    AreaName = model.AreaName,
+                    AttributeRouteInfo = new AttributeRouteInfo
                     {
                         Name = selector.AttributeRouteModel.Name,
                         Order = selector.AttributeRouteModel.Order ?? 0,
-                        Template = selector.AttributeRouteModel.Template,
+                        Template = TransformPageRoute(model, selector),
+                        SuppressLinkGeneration = selector.AttributeRouteModel.SuppressLinkGeneration,
+                        SuppressPathMatching = selector.AttributeRouteModel.SuppressPathMatching,
                     },
-                    DisplayName = $"Page: {item.Path}",
-                    FilterDescriptors = filters,
+                    DisplayName = $"Page: {model.ViewEnginePath}",
+                    EndpointMetadata = selector.EndpointMetadata.ToList(),
+                    FilterDescriptors = Array.Empty<FilterDescriptor>(),
                     Properties = new Dictionary<object, object>(model.Properties),
-                    RelativePath = item.CombinedPath,
-                    RouteValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    RelativePath = model.RelativePath,
+                    ViewEnginePath = model.ViewEnginePath,
+                };
+
+                foreach (var kvp in model.RouteValues)
+                {
+                    if (!descriptor.RouteValues.ContainsKey(kvp.Key))
                     {
-                        { "page", item.PathWithoutExtension },
-                    },
-                    ViewEnginePath = item.Path,
-                });
+                        descriptor.RouteValues.Add(kvp.Key, kvp.Value);
+                    }
+                }
+
+                if (!descriptor.RouteValues.ContainsKey("page"))
+                {
+                    descriptor.RouteValues.Add("page", model.ViewEnginePath);
+                }
+
+                actions.Add(descriptor);
             }
         }
 
-        private static SelectorModel CreateSelectorModel(string prefix, string template)
+        private static string TransformPageRoute(PageRouteModel model, SelectorModel selectorModel)
         {
-            return new SelectorModel
+            // Transformer not set on page route
+            if (model.RouteParameterTransformer == null)
             {
-                AttributeRouteModel = new AttributeRouteModel
-                {
-                    Template = AttributeRouteModel.CombineTemplates(prefix, template),
-                }
-            };
+                return selectorModel.AttributeRouteModel.Template;
+            }
+
+            var pageRouteMetadata = selectorModel.EndpointMetadata.OfType<PageRouteMetadata>().SingleOrDefault();
+            if (pageRouteMetadata == null)
+            {
+                // Selector does not have expected metadata
+                // This selector was likely configured by AddPageRouteModelConvention
+                // Use the existing explicitly configured template
+                return selectorModel.AttributeRouteModel.Template;
+            }
+
+            var segments = pageRouteMetadata.PageRoute.Split('/');
+            for (var i = 0; i < segments.Length; i++)
+            {
+                segments[i] = model.RouteParameterTransformer.TransformOutbound(segments[i]);
+            }
+
+            var transformedPageRoute = string.Join("/", segments);
+
+            // Combine transformed page route with template
+            return AttributeRouteModel.CombineTemplates(transformedPageRoute, pageRouteMetadata.RouteTemplate);
         }
     }
 }

@@ -7,9 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Html;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.AspNetCore.Mvc.TestCommon;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 using Microsoft.Extensions.WebEncoders.Testing;
 using Moq;
@@ -300,7 +298,7 @@ namespace Microsoft.AspNetCore.Mvc.Razor.TagHelpers
             // Assert
             var attribute = Assert.Single(tagHelperOutput.Attributes);
             Assert.Equal("href", attribute.Name, StringComparer.Ordinal);
-            Assert.Equal(true, attribute.Value);
+            Assert.True(Assert.IsType<bool>(attribute.Value));
             Assert.Equal(HtmlAttributeValueStyle.DoubleQuotes, attribute.ValueStyle);
         }
 

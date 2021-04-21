@@ -3,12 +3,12 @@
 
 using System;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc.Internal;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.AspNetCore.Mvc
 {
-    public class ContentResult : ActionResult
+    public class ContentResult : ActionResult, IStatusCodeActionResult
     {
         /// <summary>
         /// Gets or set the content representing the body of the response.
@@ -32,7 +32,7 @@ namespace Microsoft.AspNetCore.Mvc
                 throw new ArgumentNullException(nameof(context));
             }
 
-            var executor = context.HttpContext.RequestServices.GetRequiredService<ContentResultExecutor>();
+            var executor = context.HttpContext.RequestServices.GetRequiredService<IActionResultExecutor<ContentResult>>();
             return executor.ExecuteAsync(context, this);
         }
     }

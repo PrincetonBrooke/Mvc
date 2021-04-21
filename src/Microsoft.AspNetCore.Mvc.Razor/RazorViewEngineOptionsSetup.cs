@@ -2,63 +2,33 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Linq;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Razor;
-using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
-namespace Microsoft.AspNetCore.Mvc
+namespace Microsoft.AspNetCore.Mvc.Razor
 {
-    /// <summary>
-    /// Sets up default options for <see cref="RazorViewEngineOptions"/>.
-    /// </summary>
-    [Obsolete("This type is for internal use and will be removed in a future version.")]
-    public class RazorViewEngineOptionsSetup : ConfigureOptions<RazorViewEngineOptions>
+    internal class RazorViewEngineOptionsSetup : IConfigureOptions<RazorViewEngineOptions>
     {
-        /// <summary>
-        /// Initializes a new instance of <see cref="RazorViewEngineOptions"/>.
-        /// </summary>
-        /// <param name="hostingEnvironment"><see cref="IHostingEnvironment"/> for the application.</param>
-        public RazorViewEngineOptionsSetup(
-            IHostingEnvironment hostingEnvironment)
-            : base(options => ConfigureRazor(options, hostingEnvironment))
+        private readonly IHostingEnvironment _hostingEnvironment;
+
+        public RazorViewEngineOptionsSetup(IHostingEnvironment hostingEnvironment)
         {
+            _hostingEnvironment = hostingEnvironment ?? throw new ArgumentNullException(nameof(hostingEnvironment));
         }
 
-        private static void ConfigureRazor(
-            RazorViewEngineOptions razorOptions,
-            IHostingEnvironment hostingEnvironment)
+        public void Configure(RazorViewEngineOptions options)
         {
-            if (hostingEnvironment.ContentRootFileProvider != null)
+            if (options == null)
             {
-                razorOptions.FileProviders.Add(hostingEnvironment.ContentRootFileProvider);
+                throw new ArgumentNullException(nameof(options));
             }
 
-            var compilationOptions = razorOptions.CompilationOptions;
-            string configurationSymbol;
+            options.ViewLocationFormats.Add("/Views/{1}/{0}" + RazorViewEngine.ViewExtension);
+            options.ViewLocationFormats.Add("/Views/Shared/{0}" + RazorViewEngine.ViewExtension);
 
-            if (hostingEnvironment.IsDevelopment())
-            {
-                configurationSymbol = "DEBUG";
-                razorOptions.CompilationOptions = compilationOptions.WithOptimizationLevel(OptimizationLevel.Debug);
-            }
-            else
-            {
-                configurationSymbol = "RELEASE";
-                razorOptions.CompilationOptions = compilationOptions.WithOptimizationLevel(OptimizationLevel.Release);
-            }
-
-            var parseOptions = razorOptions.ParseOptions;
-            razorOptions.ParseOptions = parseOptions.WithPreprocessorSymbols(
-                parseOptions.PreprocessorSymbolNames.Concat(new[] { configurationSymbol }));
-
-            razorOptions.ViewLocationFormats.Add("/Views/{1}/{0}" + RazorViewEngine.ViewExtension);
-            razorOptions.ViewLocationFormats.Add("/Views/Shared/{0}" + RazorViewEngine.ViewExtension);
-
-            razorOptions.AreaViewLocationFormats.Add("/Areas/{2}/Views/{1}/{0}" + RazorViewEngine.ViewExtension);
-            razorOptions.AreaViewLocationFormats.Add("/Areas/{2}/Views/Shared/{0}" + RazorViewEngine.ViewExtension);
-            razorOptions.AreaViewLocationFormats.Add("/Views/Shared/{0}" + RazorViewEngine.ViewExtension);
+            options.AreaViewLocationFormats.Add("/Areas/{2}/Views/{1}/{0}" + RazorViewEngine.ViewExtension);
+            options.AreaViewLocationFormats.Add("/Areas/{2}/Views/Shared/{0}" + RazorViewEngine.ViewExtension);
+            options.AreaViewLocationFormats.Add("/Views/Shared/{0}" + RazorViewEngine.ViewExtension);
         }
     }
 }

@@ -7,9 +7,9 @@ using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Mvc.Internal;
 using Microsoft.AspNetCore.ResponseCaching;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Moq;
@@ -327,7 +327,7 @@ namespace Microsoft.AspNetCore.Mvc
         private IServiceProvider GetServiceProvider(Dictionary<string, CacheProfile> cacheProfiles)
         {
             var serviceProvider = new Mock<IServiceProvider>();
-            var optionsAccessor = new TestOptionsManager<MvcOptions>();
+            var optionsAccessor = Options.Create(new MvcOptions());
             if (cacheProfiles != null)
             {
                 foreach (var p in cacheProfiles)
@@ -339,6 +339,9 @@ namespace Microsoft.AspNetCore.Mvc
             serviceProvider
                 .Setup(s => s.GetService(typeof(IOptions<MvcOptions>)))
                 .Returns(optionsAccessor);
+            serviceProvider
+                .Setup(s => s.GetService(typeof(ILoggerFactory)))
+                .Returns(Mock.Of<ILoggerFactory>());
 
             return serviceProvider.Object;
         }

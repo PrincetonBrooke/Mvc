@@ -7,14 +7,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Mvc.Formatters.Internal;
-using Microsoft.AspNetCore.Mvc.TestCommon;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Primitives;
 using Moq;
 using Xunit;
 
-namespace Microsoft.AspNetCore.Mvc.Test
+namespace Microsoft.AspNetCore.Mvc
 {
     public class ProducesAttributeTests
     {
@@ -61,7 +60,7 @@ namespace Microsoft.AspNetCore.Mvc.Test
 
             // Assert
             var objectResult = Assert.IsType<ObjectResult>(resultExecutingContext.Result);
-            Assert.Equal(1, objectResult.ContentTypes.Count);
+            Assert.Single(objectResult.ContentTypes);
         }
 
         [Fact]
@@ -86,7 +85,7 @@ namespace Microsoft.AspNetCore.Mvc.Test
 
             // Assert
             var objectResult = Assert.IsType<ObjectResult>(resultExecutingContext.Result);
-            Assert.Equal(0, objectResult.ContentTypes.Count);
+            Assert.Empty(objectResult.ContentTypes);
         }
 
         [Theory]
@@ -116,6 +115,8 @@ namespace Microsoft.AspNetCore.Mvc.Test
         [InlineData("*/*", "*/*")]
         [InlineData("application/xml, */*, application/json", "*/*")]
         [InlineData("*/*, application/json", "*/*")]
+        [InlineData("application/*+json", "application/*+json")]
+        [InlineData("application/json;v=1;*", "application/json;v=1;*")]
         public void ProducesAttribute_InvalidContentType_Throws(string content, string invalidContentType)
         {
             // Act

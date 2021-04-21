@@ -5,7 +5,6 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc.TestCommon;
 using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.Extensions.Localization;
 using Moq;
@@ -102,7 +101,7 @@ namespace Microsoft.AspNetCore.Mvc.Rendering
                 {
                     {
                         new FormatModel{ FormatProperty = Status.Created },
-                        "Value: CreatedKey"
+                        "Value: Created"
                     },
                     {
                         new FormatModel { FormatProperty = Status.Done },

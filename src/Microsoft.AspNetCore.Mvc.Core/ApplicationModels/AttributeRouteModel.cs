@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.AspNetCore.Mvc.Core;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.AspNetCore.Routing;
 
 namespace Microsoft.AspNetCore.Mvc.ApplicationModels
 {
@@ -42,9 +43,11 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
             Name = other.Name;
             Order = other.Order;
             Template = other.Template;
+            SuppressLinkGeneration = other.SuppressLinkGeneration;
+            SuppressPathMatching = other.SuppressPathMatching;
         }
 
-        public IRouteTemplateProvider Attribute { get; private set; }
+        public IRouteTemplateProvider Attribute { get;}
 
         public string Template { get; set; }
 
@@ -52,14 +55,17 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
 
         public string Name { get; set; }
 
-        public bool IsAbsoluteTemplate
-        {
-            get
-            {
-                return Template != null &&
-                    IsOverridePattern(Template);
-            }
-        }
+        /// <summary>
+        /// Gets or sets a value that determines if this model participates in link generation.
+        /// </summary>
+        public bool SuppressLinkGeneration { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value that determines if this model participates in path matching (inbound routing).
+        /// </summary>
+        public bool SuppressPathMatching { get; set; }
+
+        public bool IsAbsoluteTemplate => Template != null && IsOverridePattern(Template);
 
         /// <summary>
         /// Combines two <see cref="AttributeRouteModel"/> instances and returns
@@ -96,6 +102,8 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
                 Template = combinedTemplate,
                 Order = right.Order ?? left.Order,
                 Name = ChooseName(left, right),
+                SuppressLinkGeneration = left.SuppressLinkGeneration || right.SuppressLinkGeneration,
+                SuppressPathMatching = left.SuppressPathMatching || right.SuppressPathMatching,
             };
         }
 
@@ -213,6 +221,11 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
         }
 
         public static string ReplaceTokens(string template, IDictionary<string, string> values)
+        {
+            return ReplaceTokens(template, values, routeTokenTransformer: null);
+        }
+
+        public static string ReplaceTokens(string template, IDictionary<string, string> values, IOutboundParameterTransformer routeTokenTransformer)
         {
             var builder = new StringBuilder();
             var state = TemplateParserState.Plaintext;
@@ -354,8 +367,7 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
                                 .Replace("[[", "[")
                                 .Replace("]]", "]");
 
-                            string value;
-                            if (!values.TryGetValue(token, out value))
+                            if (!values.TryGetValue(token, out var value))
                             {
                                 // Value not found
                                 var message = Resources.FormatAttributeRoute_TokenReplacement_ReplacementValueNotFound(
@@ -363,6 +375,11 @@ namespace Microsoft.AspNetCore.Mvc.ApplicationModels
                                     token,
                                     string.Join(", ", values.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase)));
                                 throw new InvalidOperationException(message);
+                            }
+
+                            if (routeTokenTransformer != null)
+                            {
+                                value = routeTokenTransformer.TransformOutbound(value);
                             }
 
                             builder.Append(value);
